@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RFCN BBALL Game Manager - Web</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+</head>
+<body class="bg-gray-100">
+  <div id="root" className="container mx-auto p-4">App failed to load. Check console for errors.</div>
+  <script type="text/javascript">
+    const App = () => {
+      const [players, setPlayers] = React.useState([]);
+      const [waitlist, setWaitlist] = React.useState([]);
+      const [pausedList, setPausedList] = React.useState([]);
+      const [nextTeam, setNextTeam] = React.useState([]);
+      const [team1, setTeam1] = React.useState([]);
+      const [team2, setTeam2] = React.useState([]);
+      const [team1Wins, setTeam1Wins] = React.useState(0);
+      const [gameStarted, setGameStarted] = React.useState(false);
+      const [team1Label, setTeam1Label] = React.useState("Team 1");
+      const [team2Label, setTeam2Label] = React.useState("Team 2");
+      const [playerName, setPlayerName] = React.useState("");
+      const [signupError, setSignupError] = React.useState(null);
+      const [loading, setLoading] = React.useState(true);
+      const [error, setError] = React.useState(null);
+      const [maxWinsLimit, setMaxWinsLimit] = React.useState(5);
+      const [maxWinsInput, setMaxWinsInput] = React.useState("");
+      const [maxWinsError, setMaxWinsError] = React.useState(null);
+
+      React.useEffect(() => {
+        try {
+          const savedState = localStorage.getItem("bballManagerState");
+          if (savedState) {
+            const state = JSON.parse(savedState);
+            setPlayers(state.players || []);
+            setWaitlist(state.waitlist || []);
+            setPausedList(state.pausedList || []);
+            setNextTeam(state.nextTeam || []);
+            setTeam1(state.team1 || []);
+            setTeam2(state.team2 || []);
+            setTeam1Wins(state.team1Wins || 0);
+            setGameStarted(state.gameStarted || false);
+            setTeam1Label(state.team1Label || "Team 1");
+            setTeam2Label(state.team2Label || "Team 2");
+            setMaxWinsLimit(state.maxWinsLimit || 5);
+          }
+          setLoading(false);
+        } catch (err) {
+          setError("Failed to load data. Please refresh.");
+          setLoading(false);
+        }
+      }, []);
+
+      React.useEffect(() => {
+        try {
+          const state = { players, waitlist, pausedList, nextTeam, team1, team2, team1Wins, gameStarted, team1Label, team2Label, maxWinsLimit };
+          localStorage.setItem("bballManagerState", JSON.stringify(state));
+        } catch (err) {
+          setError("Failed to save data. Check local storage settings.");
+        }
+      }, [players, waitlist, pausedList, nextTeam, team1, team2, team1Wins, gameStarted, team1Label, team2Label, maxWinsLimit]);
+
+      const addPlayer = () => {
+        console.log("addPlayer called with name:", playerName);
+        const name = playerName.trim();
+        if (!name) {
+          setSignupError("Please enter a valid name.");
+          console.log("addPlayer: Empty name entered.");
+          return;
+        }
+        const isDuplicate = players.some(p => p.name.toLowerCase() === name.toLowerCase());
+        console.log("addPlayer: Duplicate check for", name, "result:", isDuplicate, "existing names:", players.map(p => p.name));
+        if (isDuplicate) {
+          setSignupError("Player name already exists.");
+          return;
+        }
+        const newPlayer = { id: Date.now().toString(), name, wins: 0, losses: 0 };
+        setPlayers([...players, newPlayer]);
+        setWaitlist([...waitlist, newPlayer.id]);
+        setPlayerName("");
+        setSignupError(null);
+        fillNextTeam([...waitlist, newPlayer.id], nextTeam);
+        console.log("addPlayer: Added player", name, "ID:", newPlayer.id);
+      };
+
+      const pausePlayer = (id) => {
+        setWaitlist(waitlist.filter(pid => pid !== id));
+        setPausedList([...pausedList, id]);
+        fillNextTeam(waitlist.filter(pid => pid !== id), nextTeam);
+      };
+
+      const readyPlayer = (id) => {
+        setPausedList(pausedList.filter(pid => pid !== id));
+        setWaitlist([...waitlist, id]);
+        fillNextTeam([...waitlist, id], nextTeam);
+      };
+
+      const removePlayer = (id) => {
+        setWaitlist(waitlist.filter(pid => pid !== id));
+        setPausedList(pausedList.filter(pid => pid !== id));
+        setNextTeam(nextTeam.filter(pid => pid !== id));
+        setPlayers(players.filter(p => p.id !== id));
+        fillNextTeam(waitlist.filter(pid => pid !== id), nextTeam);
+      };
+
+      const removeFromNextTeam = (id) => {
+        setNextTeam(nextTeam.filter(pid => pid !== id));
+        setWaitlist([...waitlist, id]);
+        fillNextTeam([...waitlist, id], nextTeam);
+      };
+
+      const fillNextTeam = (newWaitlist, currentNextTeam) => {
+        console.log("fillNextTeam called with waitlist:", newWaitlist.map(id => getPlayerName(id)), "nextTeam:", currentNextTeam.map(id => getPlayerName(id)));
+        let updatedNextTeam = [...currentNextTeam];
+        let updatedWaitlist = [...newWaitlist];
+        let playersToAdd = [];
+        while (updatedNextTeam.length < 5 && updatedWaitlist.length > 0 && playersToAdd.length < (5 - updatedNextTeam.length)) {
+          const nextPlayerId = updatedWaitlist[0];
+          if (!playersToAdd.includes(nextPlayerId)) {
+            playersToAdd.push(nextPlayerId);
+            updatedWaitlist = updatedWaitlist.slice(1);
+          } else {
+            break; // Avoid duplicates
+          }
+        }
+        updatedNextTeam = [...updatedNextTeam, ...playersToAdd];
+        setWaitlist(updatedWaitlist);
+        setNextTeam(updatedNextTeam);
+        console.log("fillNextTeam updated waitlist:", updatedWaitlist.map(id => getPlayerName(id)), "nextTeam:", updatedNextTeam.map(id => getPlayerName(id)));
+      };
+
+      const startFirstGame = () => {
+        if (nextTeam.length < 1 || waitlist.length < 5 || (nextTeam.length + waitlist.length) < 10) {
+          alert("Need at least 1 player on Next Team and 5 on waitlist (total 10 or more).");
+          return;
+        }
+        console.log("startFirstGame: Initial waitlist:", waitlist.map(id => getPlayerName(id)), 
+                    "Next Team:", nextTeam.map(id => getPlayerName(id)));
+        setGameStarted(true);
+        const newTeam1 = [...nextTeam].slice(0, 5); // Use Next Team for Team 1
+        const newTeam2 = waitlist.slice(0, 5); // First 5 from waitlist for Team 2
+        const remainingWaitlist = waitlist.slice(5); // Remaining waitlist
+        console.log("startFirstGame: Team 1 (from Next Team):", newTeam1.map(id => getPlayerName(id)), 
+                    "Team 2 (from waitlist):", newTeam2.map(id => getPlayerName(id)), 
+                    "Remaining waitlist:", remainingWaitlist.map(id => getPlayerName(id)));
+        setTeam1(newTeam1);
+        setTeam2(newTeam2);
+        setWaitlist(remainingWaitlist);
+        setNextTeam([]);
+        setTeam1Label("Team 1");
+        setTeam2Label("Team 2");
+        fillNextTeam(remainingWaitlist, []);
+        console.log("startFirstGame: After fillNextTeam, waitlist:", remainingWaitlist.map(id => getPlayerName(id)), 
+                    "Next Team:", [].map(id => getPlayerName(id)));
+      };
+
+      const startNextGame = () => {
+        if (nextTeam.length < 5) {
+          alert("Not enough players in Next Team.");
+          return;
+        }
+        setTeam2(nextTeam);
+        setNextTeam([]);
+        setTeam2Label("Team 2 (Challengers)");
+        setTeam1Label("Team 1 (Winners)");
+        fillNextTeam(waitlist, []);
+      };
+
+      const declareWinner = (winner) => {
+        console.log(`declareWinner called for ${winner}. Current waitlist:`, waitlist.map(id => getPlayerName(id)));
+        let winners, losers, newTeam1, newTeam1Wins, newTeam1Label, newTeam2Label;
+        if (winner === "Team 1") {
+          winners = team1;
+          losers = team2;
+          newTeam1 = team1;
+          newTeam1Wins = team1Wins + 1;
+          newTeam1Label = "Team 1 (Winners)";
+          newTeam2Label = "Team 2";
+        } else {
+          winners = team2;
+          losers = team1;
+          newTeam1 = team2;
+          newTeam1Wins = 1;
+          newTeam1Label = "Team 1 (Winners)";
+          newTeam2Label = "Team 2";
+        }
+
+        setPlayers(players.map(p => {
+          if (winners.includes(p.id)) return { ...p, wins: p.wins + 1 };
+          if (losers.includes(p.id)) return { ...p, losses: p.losses + 1 };
+          return p;
+        }));
+
+        const shuffledLosers = [...losers].sort(() => Math.random() - 0.5);
+        let newWaitlist = [...waitlist, ...shuffledLosers];
+        console.log("New waitlist after adding losers:", newWaitlist.map(id => getPlayerName(id)));
+
+        if (newTeam1Wins >= maxWinsLimit) {
+          console.log("Max-out triggered. Current waitlist:", newWaitlist.map(id => getPlayerName(id)), "nextTeam:", nextTeam.map(id => getPlayerName(id)), "winners:", newTeam1.map(id => getPlayerName(id)));
+          newWaitlist.push(...newTeam1); // Add maxed-out winners to waitlist
+          let newTeam1Players = nextTeam.length === 5 ? [...nextTeam] : newWaitlist.slice(0, 5);
+          let team2StartIndex = nextTeam.length === 5 ? 0 : newTeam1Players.length;
+          let newTeam2Players = newWaitlist.slice(team2StartIndex, team2StartIndex + 5);
+
+          if (newTeam1Players.length < 5 || newTeam2Players.length < 5) {
+            alert("Not enough players to form new teams after max-out.");
+            setWaitlist(newWaitlist);
+            setTeam1([]);
+            setTeam2([]);
+            setNextTeam([]);
+            setTeam1Wins(0);
+            setTeam1Label("Team 1");
+            setTeam2Label("Team 2");
+            return;
+          }
+
+          let usedPlayerIds = [...newTeam1Players, ...newTeam2Players].filter(id => !newTeam1.includes(id));
+          newWaitlist = newWaitlist.filter(id => !usedPlayerIds.includes(id));
+
+          newTeam1 = newTeam1Players;
+          newTeam1Wins = 0;
+          newTeam1Label = "Team 1 (Replacements)";
+          setTeam2(newTeam2Players);
+          setNextTeam([]);
+          setWaitlist(newWaitlist);
+          newTeam2Label = "Team 2 (Hopefuls)";
+          fillNextTeam(newWaitlist, []);
+          console.log("After max-out: Team1:", newTeam1.map(id => getPlayerName(id)), "Team2:", newTeam2Players.map(id => getPlayerName(id)), "Waitlist:", newWaitlist.map(id => getPlayerName(id)), "NextTeam:", [], "Winners retained:", newTeam1.every(id => newWaitlist.includes(id) || newTeam1Players.includes(id) || newTeam2Players.includes(id)));
+        } else {
+          setTeam1(newTeam1);
+          setTeam2([]);
+          setWaitlist(newWaitlist);
+          fillNextTeam(newWaitlist, nextTeam);
+        }
+
+        setTeam1(newTeam1);
+        setTeam1Wins(newTeam1Wins);
+        setTeam1Label(newTeam1Label);
+        setTeam2Label(newTeam2Label);
+        console.log("After declareWinner, waitlist:", newWaitlist.map(id => getPlayerName(id)));
+      };
+
+      const setMaxWins = () => {
+        const value = parseInt(maxWinsInput, 10);
+        if (isNaN(value) || value <= 0) {
+          setMaxWinsError("Please enter a positive number.");
+          return;
+        }
+        setMaxWinsLimit(value);
+        setMaxWinsInput("");
+        setMaxWinsError(null);
+        console.log("Max wins limit set to:", value);
+      };
+
+      const clearAll = () => {
+        setPlayers([]);
+        setWaitlist([]);
+        setPausedList([]);
+        setNextTeam([]);
+        setTeam1([]);
+        setTeam2([]);
+        setTeam1Wins(0);
+        setGameStarted(false);
+        setTeam1Label("Team 1");
+        setTeam2Label("Team 2");
+        setError(null);
+        setSignupError(null);
+        setMaxWinsLimit(5);
+        setMaxWinsInput("");
+        setMaxWinsError(null);
+      };
+
+      const clearScores = () => {
+        setPlayers(players.map(p => ({ ...p, wins: 0, losses: 0 })));
+      };
+
+      const getPlayerName = (id) => players.find(p => p.id === id)?.name || "";
+      const maxWins = Math.max(...players.map(p => p.wins), 0);
+      const totalCount = team1.length + team2.length + nextTeam.length + waitlist.length + pausedList.length;
+      const waitlistCount = new Set([...waitlist, ...nextTeam]).size;
+      const pausedCount = pausedList.length;
+
+      if (loading) {
+        return React.createElement("div", { className: "text-center text-xl" }, "Loading...");
+      }
+
+      if (error) {
+        return React.createElement("div", { className: "text-center text-red-500" },
+          React.createElement("p", null, error),
+          React.createElement("button", {
+            onClick: () => window.location.reload(),
+            className: "mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          }, "Try Again")
+        );
+      }
+
+      return React.createElement("div", { className: "space-y-6" },
+        React.createElement("h1", { className: "text-3xl font-bold text-center" }, "RFCN BBALL Game Manager"),
+        React.createElement("div", { className: "flex justify-around bg-white p-4 rounded shadow" },
+          React.createElement("span", { className: "font-semibold" }, `Total #: ${totalCount}`),
+          React.createElement("span", { className: "font-semibold" }, `Waitlist #: ${waitlistCount}`),
+          React.createElement("span", { className: "font-semibold" }, `Paused #: ${pausedCount}`)
+        ),
+        React.createElement("div", { className: "bg-white p-4 rounded shadow" },
+          React.createElement("h2", { className: "text-xl font-semibold mb-2" }, "Player Signup"),
+          React.createElement("div", { className: "flex flex-col space-y-2" },
+            React.createElement("div", { className: "flex space-x-2" },
+              React.createElement("input", {
+                type: "text",
+                value: playerName,
+                onChange: (e) => { setPlayerName(e.target.value); setSignupError(null); },
+                placeholder: "Enter player name",
+                className: "flex-1 p-2 border rounded"
+              }),
+              React.createElement("button", {
+                onClick: addPlayer,
+                className: "bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+              }, "Sign Up")
+            ),
+            signupError && React.createElement("p", { className: "text-red-500 text-sm" }, signupError)
+          )
+        ),
+        React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-4" },
+          React.createElement("div", { className: "bg-white p-4 rounded shadow" },
+            React.createElement("h2", { className: "text-xl font-semibold mb-2" }, "Waitlist"),
+            React.createElement("ul", { className: "space-y-2" },
+              waitlist.map(id => React.createElement("li", { key: id, className: "flex justify-between items-center" },
+                React.createElement("span", null, getPlayerName(id)),
+                React.createElement("div", { className: "space-x-2" },
+                  React.createElement("button", { onClick: () => pausePlayer(id), className: "bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600" }, "Pause"),
+                  React.createElement("button", { onClick: () => removePlayer(id), className: "bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600" }, "Remove")
+                )
+              ))
+            )
+          ),
+          React.createElement("div", { className: "bg-white p-4 rounded shadow" },
+            React.createElement("h2", { className: "text-xl font-semibold mb-2" }, "Paused List"),
+            React.createElement("ul", { className: "space-y-2" },
+              pausedList.map(id => React.createElement("li", { key: id, className: "flex justify-between items-center" },
+                React.createElement("span", null, getPlayerName(id)),
+                React.createElement("button", { onClick: () => readyPlayer(id), className: "bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600" }, "Ready")
+              ))
+            )
+          ),
+          React.createElement("div", { className: "bg-white p-4 rounded shadow" },
+            React.createElement("h2", { className: "text-xl font-semibold mb-2" }, "Next Team"),
+            React.createElement("ul", { className: "space-y-2" },
+              nextTeam.map(id => React.createElement("li", { key: id, className: "flex justify-between items-center" },
+                React.createElement("span", null, getPlayerName(id)),
+                React.createElement("button", { onClick: () => removeFromNextTeam(id), className: "bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600" }, "Remove")
+              ))
+            )
+          )
+        ),
+        React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4" },
+          React.createElement("div", { className: "bg-white p-4 rounded shadow" },
+            React.createElement("h2", { className: "text-xl font-semibold mb-2" }, team1Label),
+            React.createElement("ul", { className: "space-y-2" },
+              team1.map(id => React.createElement("li", { key: id }, getPlayerName(id)))
+            ),
+            gameStarted && team2.length > 0 && React.createElement("button", {
+              onClick: () => declareWinner("Team 1"),
+              className: "mt-2 w-full bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+            }, `${team1Label} Wins`)
+          ),
+          React.createElement("div", { className: "bg-white p-4 rounded shadow" },
+            React.createElement("h2", { className: "text-xl font-semibold mb-2" }, team2Label),
+            React.createElement("ul", { className: "space-y-2" },
+              team2.map(id => React.createElement("li", { key: id }, getPlayerName(id)))
+            ),
+            gameStarted && team2.length > 0 && React.createElement("button", {
+              onClick: () => declareWinner("Team 2"),
+              className: "mt-2 w-full bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+            }, `${team2Label} Wins`)
+          )
+        ),
+        React.createElement("div", { className: "flex flex-col items-center space-y-4" },
+          React.createElement("div", { className: "flex justify-center space-x-4" },
+            React.createElement("button", {
+              onClick: startFirstGame,
+              disabled: gameStarted || nextTeam.length < 1 || waitlist.length < 5 || (nextTeam.length + waitlist.length) < 10,
+              className: "bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
+            }, "Start First Game"),
+            React.createElement("button", {
+              onClick: startNextGame,
+              disabled: nextTeam.length < 5,
+              className: "bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
+            }, "Start Next Game"),
+            React.createElement("button", { onClick: clearAll, className: "bg-red-700 text-white px-4 py-2 rounded hover:bg-red-600" }, "Clear All")
+          ),
+          React.createElement("div", { className: "bg-white p-4 rounded shadow w-full max-w-md" },
+            React.createElement("h3", { className: "text-lg font-semibold mb-2" }, `Max Wins Limit: ${maxWinsLimit}`),
+            React.createElement("div", { className: "flex flex-col space-y-2" },
+              React.createElement("div", { className: "flex space-x-2" },
+                React.createElement("input", {
+                  type: "number",
+                  value: maxWinsInput,
+                  onChange: (e) => { setMaxWinsInput(e.target.value); setMaxWinsError(null); },
+                  placeholder: "Enter max wins",
+                  className: "flex-1 p-2 border rounded"
+                }),
+                React.createElement("button", {
+                  onClick: setMaxWins,
+                  className: "bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                }, "Set")
+              ),
+              maxWinsError && React.createElement("p", { className: "text-red-500 text-sm" }, maxWinsError)
+            )
+          )
+        ),
+        React.createElement("div", { className: "bg-white p-4 rounded shadow" },
+          React.createElement("h2", { className: "text-xl font-semibold mb-2" }, "Scoreboard"),
+          React.createElement("table", { className: "w-full text-center" },
+            React.createElement("thead", null,
+              React.createElement("tr", { className: "bg-gray-200" },
+                React.createElement("th", { className: "p-2" }, "Name"),
+                React.createElement("th", { className: "p-2" }, "Wins"),
+                React.createElement("th", { className: "p-2" }, "Losses")
+              )
+            ),
+            React.createElement("tbody", null,
+              players.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())).map(p => React.createElement("tr", {
+                key: p.id,
+                className: p.wins === maxWins && maxWins > 0 ? "bg-yellow-200" : ""
+              },
+                React.createElement("td", { className: "p-2" }, p.name),
+                React.createElement("td", { className: "p-2" }, p.wins),
+                React.createElement("td", { className: "p-2" }, p.losses)
+              ))
+            )
+          ),
+          React.createElement("button", { onClick: clearScores, className: "mt-2 bg-red-700 text-white px-4 py-2 rounded hover:bg-red-600" }, "Clear All Scores")
+        )
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(React.createElement(App));
+  </script>
+</body>
+</html>
