@@ -29,6 +29,7 @@
       const [maxWinsLimit, setMaxWinsLimit] = React.useState(5);
       const [maxWinsInput, setMaxWinsInput] = React.useState("");
       const [maxWinsError, setMaxWinsError] = React.useState(null);
+      const [gameMode, setGameMode] = React.useState("5x5");
 
       React.useEffect(() => {
         try {
@@ -46,6 +47,7 @@
             setTeam1Label(state.team1Label || "Team 1");
             setTeam2Label(state.team2Label || "Team 2");
             setMaxWinsLimit(state.maxWinsLimit || 5);
+            setGameMode(state.gameMode || "5x5");
           }
           setLoading(false);
         } catch (err) {
@@ -56,12 +58,12 @@
 
       React.useEffect(() => {
         try {
-          const state = { players, waitlist, pausedList, nextTeam, team1, team2, team1Wins, gameStarted, team1Label, team2Label, maxWinsLimit };
+          const state = { players, waitlist, pausedList, nextTeam, team1, team2, team1Wins, gameStarted, team1Label, team2Label, maxWinsLimit, gameMode };
           localStorage.setItem("bballManagerState", JSON.stringify(state));
         } catch (err) {
           setError("Failed to save data. Check local storage settings.");
         }
-      }, [players, waitlist, pausedList, nextTeam, team1, team2, team1Wins, gameStarted, team1Label, team2Label, maxWinsLimit]);
+      }, [players, waitlist, pausedList, nextTeam, team1, team2, team1Wins, gameStarted, team1Label, team2Label, maxWinsLimit, gameMode]);
 
       const addPlayer = () => {
         console.log("addPlayer called with name:", playerName);
@@ -112,12 +114,26 @@
         fillNextTeam([...waitlist, id], nextTeam);
       };
 
+      const getTeamSize = () => {
+        switch (gameMode) {
+          case "5x5": return 5;
+          case "4x4": return 4; // Placeholder
+          case "3x3": return 3; // Placeholder
+          default: return 5;
+        }
+      };
+
       const fillNextTeam = (newWaitlist, currentNextTeam) => {
+        if (gameMode !== "5x5") {
+          console.log(`fillNextTeam: ${gameMode} mode not implemented yet.`);
+          return;
+        }
+        const teamSize = getTeamSize();
         console.log("fillNextTeam called with waitlist:", newWaitlist.map(id => getPlayerName(id)), "nextTeam:", currentNextTeam.map(id => getPlayerName(id)));
         let updatedNextTeam = [...currentNextTeam];
         let updatedWaitlist = [...newWaitlist];
         let playersToAdd = [];
-        while (updatedNextTeam.length < 5 && updatedWaitlist.length > 0 && playersToAdd.length < (5 - updatedNextTeam.length)) {
+        while (updatedNextTeam.length < teamSize && updatedWaitlist.length > 0 && playersToAdd.length < (teamSize - updatedNextTeam.length)) {
           const nextPlayerId = updatedWaitlist[0];
           if (!playersToAdd.includes(nextPlayerId)) {
             playersToAdd.push(nextPlayerId);
@@ -133,16 +149,21 @@
       };
 
       const startFirstGame = () => {
-        if (nextTeam.length < 1 || waitlist.length < 5 || (nextTeam.length + waitlist.length) < 10) {
-          alert("Need at least 1 player on Next Team and 5 on waitlist (total 10 or more).");
+        if (gameMode !== "5x5") {
+          alert(`${gameMode} mode not implemented yet.`);
+          return;
+        }
+        const teamSize = getTeamSize();
+        if (nextTeam.length < 1 || waitlist.length < teamSize || (nextTeam.length + waitlist.length) < teamSize * 2) {
+          alert(`Need at least 1 player on Next Team and ${teamSize} on waitlist (total ${teamSize * 2} or more).`);
           return;
         }
         console.log("startFirstGame: Initial waitlist:", waitlist.map(id => getPlayerName(id)), 
                     "Next Team:", nextTeam.map(id => getPlayerName(id)));
         setGameStarted(true);
-        const newTeam1 = [...nextTeam].slice(0, 5); // Use Next Team for Team 1
-        const newTeam2 = waitlist.slice(0, 5); // First 5 from waitlist for Team 2
-        const remainingWaitlist = waitlist.slice(5); // Remaining waitlist
+        const newTeam1 = [...nextTeam].slice(0, teamSize); // Use Next Team for Team 1
+        const newTeam2 = waitlist.slice(0, teamSize); // First teamSize from waitlist for Team 2
+        const remainingWaitlist = waitlist.slice(teamSize); // Remaining waitlist
         console.log("startFirstGame: Team 1 (from Next Team):", newTeam1.map(id => getPlayerName(id)), 
                     "Team 2 (from waitlist):", newTeam2.map(id => getPlayerName(id)), 
                     "Remaining waitlist:", remainingWaitlist.map(id => getPlayerName(id)));
@@ -158,8 +179,13 @@
       };
 
       const startNextGame = () => {
-        if (nextTeam.length < 5) {
-          alert("Not enough players in Next Team.");
+        if (gameMode !== "5x5") {
+          alert(`${gameMode} mode not implemented yet.`);
+          return;
+        }
+        const teamSize = getTeamSize();
+        if (nextTeam.length < teamSize) {
+          alert(`Not enough players in Next Team (need ${teamSize}).`);
           return;
         }
         setTeam2(nextTeam);
@@ -170,6 +196,10 @@
       };
 
       const declareWinner = (winner) => {
+        if (gameMode !== "5x5") {
+          alert(`${gameMode} mode not implemented yet.`);
+          return;
+        }
         console.log(`declareWinner called for ${winner}. Current waitlist:`, waitlist.map(id => getPlayerName(id)));
         let winners, losers, newTeam1, newTeam1Wins, newTeam1Label, newTeam2Label;
         if (winner === "Team 1") {
@@ -198,14 +228,15 @@
         let newWaitlist = [...waitlist, ...shuffledLosers];
         console.log("New waitlist after adding losers:", newWaitlist.map(id => getPlayerName(id)));
 
+        const teamSize = getTeamSize();
         if (newTeam1Wins >= maxWinsLimit) {
           console.log("Max-out triggered. Current waitlist:", newWaitlist.map(id => getPlayerName(id)), "nextTeam:", nextTeam.map(id => getPlayerName(id)), "winners:", newTeam1.map(id => getPlayerName(id)));
           newWaitlist.push(...newTeam1); // Add maxed-out winners to waitlist
-          let newTeam1Players = nextTeam.length === 5 ? [...nextTeam] : newWaitlist.slice(0, 5);
-          let team2StartIndex = nextTeam.length === 5 ? 0 : newTeam1Players.length;
-          let newTeam2Players = newWaitlist.slice(team2StartIndex, team2StartIndex + 5);
+          let newTeam1Players = nextTeam.length === teamSize ? [...nextTeam] : newWaitlist.slice(0, teamSize);
+          let team2StartIndex = nextTeam.length === teamSize ? 0 : newTeam1Players.length;
+          let newTeam2Players = newWaitlist.slice(team2StartIndex, team2StartIndex + teamSize);
 
-          if (newTeam1Players.length < 5 || newTeam2Players.length < 5) {
+          if (newTeam1Players.length < teamSize || newTeam2Players.length < teamSize) {
             alert("Not enough players to form new teams after max-out.");
             setWaitlist(newWaitlist);
             setTeam1([]);
@@ -255,6 +286,12 @@
         console.log("Max wins limit set to:", value);
       };
 
+      const handleGameModeChange = (e) => {
+        const newMode = e.target.value;
+        setGameMode(newMode);
+        console.log("Game mode changed to:", newMode);
+      };
+
       const clearAll = () => {
         setPlayers([]);
         setWaitlist([]);
@@ -271,6 +308,7 @@
         setMaxWinsLimit(5);
         setMaxWinsInput("");
         setMaxWinsError(null);
+        setGameMode("5x5");
       };
 
       const clearScores = () => {
@@ -381,15 +419,29 @@
           React.createElement("div", { className: "flex justify-center space-x-4" },
             React.createElement("button", {
               onClick: startFirstGame,
-              disabled: gameStarted || nextTeam.length < 1 || waitlist.length < 5 || (nextTeam.length + waitlist.length) < 10,
+              disabled: gameStarted || nextTeam.length < 1 || waitlist.length < getTeamSize() || (nextTeam.length + waitlist.length) < getTeamSize() * 2,
               className: "bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
             }, "Start First Game"),
             React.createElement("button", {
               onClick: startNextGame,
-              disabled: nextTeam.length < 5,
+              disabled: nextTeam.length < getTeamSize(),
               className: "bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
             }, "Start Next Game"),
             React.createElement("button", { onClick: clearAll, className: "bg-red-700 text-white px-4 py-2 rounded hover:bg-red-600" }, "Clear All")
+          ),
+          React.createElement("div", { className: "bg-white p-4 rounded shadow w-full max-w-md" },
+            React.createElement("h3", { className: "text-lg font-semibold mb-2" }, `Game Mode: ${gameMode}`),
+            React.createElement("div", { className: "flex space-x-2" },
+              React.createElement("select", {
+                value: gameMode,
+                onChange: handleGameModeChange,
+                className: "flex-1 p-2 border rounded"
+              },
+                React.createElement("option", { value: "5x5" }, "5x5"),
+                React.createElement("option", { value: "4x4" }, "4x4"),
+                React.createElement("option", { value: "3x3" }, "3x3")
+              )
+            )
           ),
           React.createElement("div", { className: "bg-white p-4 rounded shadow w-full max-w-md" },
             React.createElement("h3", { className: "text-lg font-semibold mb-2" }, `Max Wins Limit: ${maxWinsLimit}`),
