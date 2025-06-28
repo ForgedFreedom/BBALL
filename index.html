@@ -11,6 +11,14 @@
 <body class="bg-gray-100">
   <div id="root" className="container mx-auto p-4">App failed to load. Check console for errors.</div>
   <script type="text/javascript">
+    // Version: 1.0.7 - 2025-06-28 - Added "How We Play Around Here" section with initial game rules
+    // Version: 1.0.6 - 2025-06-28 - Added 15-character limit for player names in signup
+    // Version: 1.0.5 - 2025-06-28 - Fixed runtime error 'Cannot access startNextGame before initialization' by reordering function declarations
+    // Version: 1.0.4 - 2025-06-28 - Added confirmation modal for Start Next Game with Next Team players, winning team, and max wins note
+    // Version: 1.0.3 - 2025-06-28 - Added team players to winner confirmation modal message
+    // Version: 1.0.2 - 2025-06-28 - Fixed syntax error causing 'Unexpected end of input'
+    // Version: 1.0.1 - 2025-06-28 - Added confirmation modal for winner selection
+    // Version: 1.0.0 - 2025-06-27 - Initial version with button50 fixed to button in Court B section
     const App = React.memo(() => {
       const [players, setPlayers] = React.useState([]);
       const [waitlist, setWaitlist] = React.useState([]);
@@ -37,8 +45,10 @@
       const [maxWinsError, setMaxWinsError] = React.useState(null);
       const [gameMode, setGameMode] = React.useState("5x5");
       const [lastWinnerCourtA, setLastWinnerCourtA] = React.useState(null);
-      const [swappingPlayerId, setSwappingPlayerId] = React.useState(null);
+      const [swappingPlayer, setSwappingPlayer] = React.useState(null);
       const [swapError, setSwapError] = React.useState(null);
+      const [pendingWinner, setPendingWinner] = React.useState(null);
+      const [pendingStart, setPendingStart] = React.useState(null);
 
       const lastFillState = React.useRef({ waitlistLength: 0, nextTeamLength: 0, gameMode: "5x5" });
 
@@ -139,7 +149,6 @@
                     "TeamSize:", teamSize);
         let newNextTeam = [...nextTeam];
         let newWaitlist = [...waitlist];
-        // Only fill if nextTeam is not full
         if (newNextTeam.length < teamSize) {
           while (newNextTeam.length < teamSize && newWaitlist.length > 0) {
             const playerId = newWaitlist[0];
@@ -207,6 +216,11 @@
           console.log("addPlayer: Empty name entered.");
           return;
         }
+        if (name.length > 15) {
+          setSignupError("Player name must be 15 characters or less.");
+          console.log("addPlayer: Name too long:", name);
+          return;
+        }
         const normalizedName = name.toLowerCase().trim();
         const isDuplicate = players.some(p => p.name.toLowerCase().trim() === normalizedName);
         console.log("addPlayer: Duplicate check for", name, "result:", isDuplicate);
@@ -249,48 +263,97 @@
                     "NextTeam:", nextTeam.filter(pid => pid !== id).map(getPlayerName));
       }, [waitlist, nextTeam, getPlayerName]);
 
-      const startSwap = React.useCallback((id) => {
+      const startSwap = React.useCallback((id, sourceList) => {
         console.log("startSwap called for player ID:", id, "Name:", getPlayerName(id), 
-                    "NextTeam:", nextTeam.map(getPlayerName), 
+                    "SourceList:", sourceList, 
                     "Waitlist:", waitlist.map(getPlayerName));
         if (waitlist.length === 0) {
           setSwapError("No players available on Waitlist to swap.");
           console.log("startSwap: Aborted - Waitlist empty.");
           return;
         }
-        setSwappingPlayerId(id);
+        setSwappingPlayer({ id, sourceList });
         setSwapError(null);
-      }, [nextTeam, waitlist, getPlayerName]);
+      }, [waitlist, getPlayerName]);
 
       const completeSwap = React.useCallback((waitlistPlayerId) => {
-        console.log("completeSwap called. Swapping Next Team player ID:", swappingPlayerId, "Name:", getPlayerName(swappingPlayerId), 
-                    "with Waitlist player ID:", waitlistPlayerId, "Name:", getPlayerName(waitlistPlayerId));
-        if (!nextTeam.includes(swappingPlayerId) || !waitlist.includes(waitlistPlayerId)) {
+        if (!swappingPlayer || !waitlist.includes(waitlistPlayerId)) {
           setSwapError("Invalid player selection for swap.");
-          console.warn("completeSwap: Invalid player IDs - NextTeam:", nextTeam, "Waitlist:", waitlist);
-          setSwappingPlayerId(null);
+          console.warn("completeSwap: Invalid player IDs - SwappingPlayer:", swappingPlayer, "Waitlist:", waitlist);
+          setSwappingPlayer(null);
           return;
         }
-        setNextTeam(prev => {
-          const newNextTeam = prev.filter(id => id !== swappingPlayerId).concat(waitlistPlayerId);
-          console.log("completeSwap: Updated nextTeam:", newNextTeam.map(getPlayerName));
-          return newNextTeam;
+        const { id: sourcePlayerId, sourceList } = swappingPlayer;
+        console.log("completeSwap called. Swapping player ID:", sourcePlayerId, "Name:", getPlayerName(sourcePlayerId), 
+                    "from", sourceList, 
+                    "with Waitlist player ID:", waitlistPlayerId, "Name:", getPlayerName(waitlistPlayerId));
+
+        let isValid = false;
+        switch (sourceList) {
+          case "waitlist": isValid = waitlist.includes(sourcePlayerId); break;
+          case "pausedList": isValid = pausedList.includes(sourcePlayerId); break;
+          case "nextTeam": isValid = nextTeam.includes(sourcePlayerId); break;
+          case "team1": isValid = team1.includes(sourcePlayerId); break;
+          case "team2": isValid = team2.includes(sourcePlayerId); break;
+          case "team3": isValid = team3.includes(sourcePlayerId); break;
+          case "team4": isValid = team4.includes(sourcePlayerId); break;
+          default: console.warn("completeSwap: Invalid sourceList:", sourceList);
+        }
+        if (!isValid) {
+          setSwapError("Source player not found in specified list.");
+          console.warn("completeSwap: Source player ID", sourcePlayerId, "not in", sourceList);
+          setSwappingPlayer(null);
+          return;
+        }
+
+        switch (sourceList) {
+          case "waitlist":
+            setWaitlist(prev => prev.map(id => id === sourcePlayerId ? waitlistPlayerId : id === waitlistPlayerId ? sourcePlayerId : id));
+            break;
+          case "pausedList":
+            setPausedList(prev => prev.filter(id => id !== sourcePlayerId).concat(waitlistPlayerId));
+            setWaitlist(prev => prev.filter(id => id !== waitlistPlayerId).concat(sourcePlayerId));
+            break;
+          case "nextTeam":
+            setNextTeam(prev => prev.filter(id => id !== sourcePlayerId).concat(waitlistPlayerId));
+            setWaitlist(prev => prev.filter(id => id !== waitlistPlayerId).concat(sourcePlayerId));
+            break;
+          case "team1":
+            setTeam1(prev => prev.filter(id => id !== sourcePlayerId).concat(waitlistPlayerId));
+            setWaitlist(prev => prev.filter(id => id !== waitlistPlayerId).concat(sourcePlayerId));
+            break;
+          case "team2":
+            setTeam2(prev => prev.filter(id => id !== sourcePlayerId).concat(waitlistPlayerId));
+            setWaitlist(prev => prev.filter(id => id !== waitlistPlayerId).concat(sourcePlayerId));
+            break;
+          case "team3":
+            setTeam3(prev => prev.filter(id => id !== sourcePlayerId).concat(waitlistPlayerId));
+            setWaitlist(prev => prev.filter(id => id !== waitlistPlayerId).concat(sourcePlayerId));
+            break;
+          case "team4":
+            setTeam4(prev => prev.filter(id => id !== sourcePlayerId).concat(waitlistPlayerId));
+            setWaitlist(prev => prev.filter(id => id !== waitlistPlayerId).concat(sourcePlayerId));
+            break;
+        }
+
+        console.log("completeSwap: Swap completed - Updated lists:", {
+          waitlist: waitlist.map(getPlayerName),
+          pausedList: pausedList.map(getPlayerName),
+          nextTeam: nextTeam.map(getPlayerName),
+          team1: team1.map(getPlayerName),
+          team2: team2.map(getPlayerName),
+          team3: team3.map(getPlayerName),
+          team4: team4.map(getPlayerName),
         });
-        setWaitlist(prev => {
-          const newWaitlist = prev.filter(id => id !== waitlistPlayerId).concat(swappingPlayerId);
-          console.log("completeSwap: Updated waitlist:", newWaitlist.map(getPlayerName));
-          return newWaitlist;
-        });
-        setSwappingPlayerId(null);
+        setSwappingPlayer(null);
         setSwapError(null);
-        console.log("completeSwap: Swap completed.");
-      }, [swappingPlayerId, nextTeam, waitlist, getPlayerName]);
+      }, [swappingPlayer, waitlist, pausedList, nextTeam, team1, team2, team3, team4, getPlayerName]);
 
       const cancelSwap = React.useCallback(() => {
-        console.log("cancelSwap called. Clearing swappingPlayerId:", swappingPlayerId);
-        setSwappingPlayerId(null);
+        console.log("cancelSwap called. Clearing swappingPlayer:", swappingPlayer);
+        setSwappingPlayer(null);
         setSwapError(null);
-      }, [swappingPlayerId]);
+      }, [swappingPlayer]);
 
       const shuffleArray = (array) => {
         const shuffled = [...array];
@@ -441,6 +504,47 @@
         }
       }, [gameMode, totalCount, nextTeam, waitlist, getTeamSize, getPlayerName]);
 
+      const initiateStartNextGame = React.useCallback((court) => {
+        console.log(`initiateStartNextGame called for Court: ${court}`);
+        setPendingStart(court);
+      }, []);
+
+      const confirmStartNextGame = React.useCallback(() => {
+        if (!pendingStart) {
+          console.warn("confirmStartNextGame: No pending start to confirm.");
+          return;
+        }
+        console.log(`confirmStartNextGame: Confirmed start for Court: ${pendingStart}`);
+        startNextGame(pendingStart);
+        setPendingStart(null);
+      }, [pendingStart, startNextGame]);
+
+      const cancelStartNextGame = React.useCallback(() => {
+        console.log("cancelStartNextGame called. Clearing pendingStart:", pendingStart);
+        setPendingStart(null);
+      }, [pendingStart]);
+
+      const initiateWinnerConfirmation = React.useCallback((court, winner) => {
+        console.log(`initiateWinnerConfirmation called for Court: ${court}, Winner: ${winner}`);
+        setPendingWinner({ court, winner });
+      }, []);
+
+      const confirmWinner = React.useCallback(() => {
+        if (!pendingWinner) {
+          console.warn("confirmWinner: No pending winner to confirm.");
+          return;
+        }
+        const { court, winner } = pendingWinner;
+        console.log(`confirmWinner: Confirmed winner for Court: ${court}, Winner: ${winner}`);
+        declareWinner(court, winner);
+        setPendingWinner(null);
+      }, [pendingWinner]);
+
+      const cancelWinnerConfirmation = React.useCallback(() => {
+        console.log("cancelWinnerConfirmation called. Clearing pendingWinner:", pendingWinner);
+        setPendingWinner(null);
+      }, [pendingWinner]);
+
       const declareWinner = React.useCallback((court, winner) => {
         if (gameMode === "3x3") {
           alert(`${gameMode} mode not implemented yet.`);
@@ -503,33 +607,27 @@
           console.log("Max-out triggered on", court, "Initial Waitlist:", newWaitlist.map(getPlayerName), 
                       "NextTeam:", nextTeam.map(getPlayerName));
           if (court === "A") {
-            // Step 1: Move Team 1 to waitlist
             newWaitlist = [...newWaitlist, ...newTeam1];
             console.log("Max-out Court A Step 1: Added Team 1 to waitlist:", newWaitlist.map(getPlayerName));
-            // Step 2: Clear Team 1
             setTeam1([]);
             console.log("Max-out Court A Step 2: Cleared Team 1");
-            // Step 3: Move Team 2 to waitlist
             newWaitlist = [...newWaitlist, ...losers];
             console.log("Max-out Court A Step 3: Added Team 2 to waitlist:", newWaitlist.map(getPlayerName));
-            // Step 4: Clear Team 2
             setTeam2([]);
             console.log("Max-out Court A Step 4: Cleared Team 2");
-            // Step 5: Move nextTeam to Team 1 if sufficient
             let newTeam1Players = [];
             let newTeam2Players = [];
             if (nextTeam.length >= teamSize) {
               newTeam1Players = nextTeam.slice(0, teamSize);
               console.log("Max-out Court A Step 5: Moved nextTeam to Team 1:", newTeam1Players.map(getPlayerName));
               setTeam1(newTeam1Players);
-              setNextTeam(nextTeam.slice(teamSize)); // Preserve remaining nextTeam
+              setNextTeam(nextTeam.slice(teamSize));
               setTeam1Label("Team 1 (Winners)");
             } else {
               console.log("Max-out Court A Step 5: Insufficient players in nextTeam to form Team 1:", nextTeam.map(getPlayerName));
               alert("Not enough players in Next Team to form Team 1 after max-out on Court A.");
             }
-            // Step 6: Update waitlist and rely on fillNextTeam useEffect
-            newWaitlist = shuffleArray(newWaitlist); // Shuffle waitlist
+            newWaitlist = shuffleArray(newWaitlist);
             setWaitlist(newWaitlist);
             setTeam2(newTeam2Players);
             setTeam1Wins(0);
@@ -541,33 +639,27 @@
                         "Waitlist:", newWaitlist.map(getPlayerName), 
                         "NextTeam:", nextTeam.slice(teamSize).map(getPlayerName));
           } else if (court === "B") {
-            // Step 1: Move Team 3 to waitlist
             newWaitlist = [...newWaitlist, ...newTeam3];
             console.log("Max-out Court B Step 1: Added Team 3 to waitlist:", newWaitlist.map(getPlayerName));
-            // Step 2: Clear Team 3
             setTeam3([]);
             console.log("Max-out Court B Step 2: Cleared Team 3");
-            // Step 3: Move Team 4 to waitlist
             newWaitlist = [...newWaitlist, ...losers];
             console.log("Max-out Court B Step 3: Added Team 4 to waitlist:", newWaitlist.map(getPlayerName));
-            // Step 4: Clear Team 4
             setTeam4([]);
             console.log("Max-out Court B Step 4: Cleared Team 4");
-            // Step 5: Move nextTeam to Team 3 if sufficient
             let newTeam3Players = [];
             let newTeam4Players = [];
             if (nextTeam.length >= teamSize) {
               newTeam3Players = nextTeam.slice(0, teamSize);
               console.log("Max-out Court B Step 5: Moved nextTeam to Team 3:", newTeam3Players.map(getPlayerName));
               setTeam3(newTeam3Players);
-              setNextTeam(nextTeam.slice(teamSize)); // Preserve remaining nextTeam
+              setNextTeam(nextTeam.slice(teamSize));
               setTeam3Label("Team 3 (Winners)");
             } else {
               console.log("Max-out Court B Step 5: Insufficient players in nextTeam to form Team 3:", nextTeam.map(getPlayerName));
               alert("Not enough players in Next Team to form Team 3 after max-out on Court B.");
             }
-            // Step 6: Update waitlist and rely on fillNextTeam useEffect
-            newWaitlist = shuffleArray(newWaitlist); // Shuffle waitlist
+            newWaitlist = shuffleArray(newWaitlist);
             setWaitlist(newWaitlist);
             setTeam4(newTeam4Players);
             setTeam3Wins(0);
@@ -738,8 +830,10 @@
         setMaxWinsError(null);
         setGameMode("5x5");
         setLastWinnerCourtA(null);
-        setSwappingPlayerId(null);
+        setSwappingPlayer(null);
         setSwapError(null);
+        setPendingWinner(null);
+        setPendingStart(null);
       }, []);
 
       const clearScores = React.useCallback(() => {
@@ -756,12 +850,12 @@
 
       if (error) {
         return React.createElement("div", { className: "text-center text-red-500" },
-                      React.createElement("p", null, error),
-                      React.createElement("button", {
-                        onClick: () => window.location.reload(),
-                        className: "mt-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                      }, "Try Again")
-                    );
+          React.createElement("p", null, error),
+          React.createElement("button", {
+            onClick: () => window.location.reload(),
+            className: "mt-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          }, "Try Again")
+        );
       }
 
       return React.createElement("div", { className: "space-y-6" },
@@ -779,7 +873,8 @@
                 type: "text",
                 value: playerName,
                 onChange: (e) => { setPlayerName(e.target.value); setSignupError(null); },
-                placeholder: "Enter player name",
+                placeholder: "Enter player name (max 15 chars)",
+                maxLength: 15,
                 className: "flex-1 p-2 border rounded-lg"
               }),
               React.createElement("button", {
@@ -797,8 +892,19 @@
               waitlist.map(id => React.createElement("li", { key: id, className: "flex justify-between items-center" },
                 React.createElement("p", null, getPlayerName(id)),
                 React.createElement("div", { className: "space-x-2" },
-                  React.createElement("button", { onClick: () => pausePlayer(id), className: "bg-yellow-500 text-white px-2 py-1 rounded-lg hover:bg-yellow-600" }, "Pause"),
-                  React.createElement("button", { onClick: () => removePlayer(id), className: "bg-red-600 text-white px-2 py-1 rounded-lg hover:bg-red-700" }, "Remove")
+                  React.createElement("button", { 
+                    onClick: () => startSwap(id, "waitlist"), 
+                    disabled: waitlist.length <= 1,
+                    className: "bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
+                  }, "Swap"),
+                  React.createElement("button", { 
+                    onClick: () => pausePlayer(id), 
+                    className: "bg-yellow-500 text-white px-2 py-1 rounded-lg hover:bg-yellow-600" 
+                  }, "Pause"),
+                  React.createElement("button", { 
+                    onClick: () => removePlayer(id), 
+                    className: "bg-red-600 text-white px-2 py-1 rounded-lg hover:bg-red-700" 
+                  }, "Remove")
                 )
               ))
             )
@@ -808,7 +914,17 @@
             React.createElement("ul", { className: "space-y-2" },
               pausedList.map(id => React.createElement("li", { key: id, className: "flex justify-between items-center" },
                 React.createElement("p", null, getPlayerName(id)),
-                React.createElement("button", { onClick: () => readyPlayer(id), className: "bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700" }, "Ready")
+                React.createElement("div", { className: "space-x-2" },
+                  React.createElement("button", { 
+                    onClick: () => startSwap(id, "pausedList"), 
+                    disabled: waitlist.length === 0,
+                    className: "bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
+                  }, "Swap"),
+                  React.createElement("button", { 
+                    onClick: () => readyPlayer(id), 
+                    className: "bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700" 
+                  }, "Ready")
+                )
               ))
             )
           ),
@@ -818,171 +934,274 @@
               nextTeam.map(id => React.createElement("li", { key: id, className: "flex justify-between items-center" },
                 React.createElement("p", null, getPlayerName(id)),
                 React.createElement("button", { 
-                  onClick: () => startSwap(id), 
+                  onClick: () => startSwap(id, "nextTeam"), 
                   disabled: waitlist.length === 0,
                   className: "bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
                 }, "Swap")
               ))
             )
-          )
-        ),
-        swappingPlayerId && React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" },
-          React.createElement("div", { className: "bg-white p-6 rounded-lg shadow-lg max-w-md w-full" },
-            React.createElement("h3", { className: "text-lg font-semibold mb-4" }, `Select Waitlist Player to Swap with ${getPlayerName(swappingPlayerId)}`),
-            React.createElement("ul", { className: "space-y-2 mb-4" },
-              waitlist.map(id => React.createElement("li", { key: id, className: "flex justify-between items-center" },
-                React.createElement("p", null, getPlayerName(id)),
+          ),
+          swappingPlayer && React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" },
+            React.createElement("div", { className: "bg-white p-6 rounded-lg shadow-lg max-w-md w-full" },
+              React.createElement("h3", { className: "text-lg font-semibold mb-4" }, 
+                `Select Waitlist Player to Swap with ${getPlayerName(swappingPlayer.id)}`),
+              React.createElement("ul", { className: "space-y-2 mb-4" },
+                waitlist.filter(id => id !== swappingPlayer.id).map(id => 
+                  React.createElement("li", { key: id, className: "flex justify-between items-center" },
+                    React.createElement("p", null, getPlayerName(id)),
+                    React.createElement("button", {
+                      onClick: () => completeSwap(id),
+                      className: "bg-blue-600 text-white px-2 py-1 rounded-lg hover:bg-blue-700"
+                    }, "Select")
+                  )
+                )
+              ),
+              swapError && React.createElement("p", { className: "text-red-500 text-sm mb-4" }, swapError),
+              React.createElement("button", {
+                onClick: cancelSwap,
+                className: "bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600"
+              }, "Cancel")
+            )
+          ),
+          pendingWinner && React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" },
+            React.createElement("div", { className: "bg-white p-6 rounded-lg shadow-lg max-w-md w-full" },
+              React.createElement("h3", { className: "text-lg font-semibold mb-4" }, 
+                `Are you sure you want to select ${pendingWinner.winner === "Team 1" ? team1Label : 
+                                                  pendingWinner.winner === "Team 2" ? team2Label : 
+                                                  pendingWinner.winner === "Team 3" ? team3Label : team4Label} ` +
+                `(Players: ${(pendingWinner.winner === "Team 1" ? team1 : 
+                              pendingWinner.winner === "Team 2" ? team2 : 
+                              pendingWinner.winner === "Team 3" ? team3 : team4)
+                              .map(getPlayerName)
+                              .join(", ") || "None"}) as the winner of Court ${pendingWinner.court}?`),
+              React.createElement("div", { className: "flex justify-end space-x-4" },
                 React.createElement("button", {
-                  onClick: () => completeSwap(id),
-                  className: "bg-blue-600 text-white px-2 py-1 rounded-lg hover:bg-blue-700"
-                }, "Select")
-              ))
-            ),
-            swapError && React.createElement("p", { className: "text-red-500 text-sm mb-4" }, swapError),
-            React.createElement("button", {
-              onClick: cancelSwap,
-              className: "bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600"
-            }, "Cancel")
-          )
-        ),
-        React.createElement("div", { className: "space-y-6" },
-          React.createElement("div", { className: "bg-white p-4 rounded shadow" },
-            React.createElement("h2", { className: "text-xl font-semibold mb-2" }, "Court A"),
-            React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4" },
-              React.createElement("div", null,
-                React.createElement("h3", { className: "text-lg font-semibold mb-2" }, team1Label),
-                React.createElement("ul", { className: "space-y-2" },
-                  team1.map(id => React.createElement("li", { key: id }, getPlayerName(id)))
-                ),
-                gameStartedA && team2.length > 0 && React.createElement("button", {
-                  onClick: () => declareWinner("A", "Team 1"),
-                  className: "mt-2 w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                }, `${team1Label} Wins`)
-              ),
-              React.createElement("div", null,
-                React.createElement("h3", { className: "text-lg font-semibold mb-2" }, team2Label),
-                React.createElement("ul", { className: "space-y-2" },
-                  team2.map(id => React.createElement("li", { key: id }, getPlayerName(id)))
-                ),
-                gameStartedA && team2.length > 0 && React.createElement("button", {
-                  onClick: () => declareWinner("A", "Team 2"),
-                  className: "mt-2 w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                }, `${team2Label} Wins`)
-              )
-            ),
-            React.createElement("div", { className: "flex justify-center space-x-4 mt-4" },
-              React.createElement("button", {
-                onClick: () => startFirstGame("A"),
-                disabled: gameStartedA || totalCount < (gameMode === "5x5" ? 10 : 8),
-                className: "bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-              }, "Start First Game: Court A"),
-              React.createElement("button", {
-                onClick: () => startNextGame("A"),
-                disabled: totalCount < (gameMode === "5x5" ? 10 : 8) || team2.length > 0,
-                className: "bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-              }, "Start Next Game: Court A")
-            )
-          ),
-          gameMode === "4x4" && React.createElement("div", { className: "bg-white p-4 rounded shadow" },
-            React.createElement("h2", { className: "text-xl font-semibold mb-2" }, "Court B"),
-            React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4" },
-              React.createElement("div", null,
-                React.createElement("h3", { className: "text-lg font-semibold mb-2" }, team3Label),
-                React.createElement("ul", { className: "space-y-2" },
-                  team3.map(id => React.createElement("li", { key: id }, getPlayerName(id)))
-                ),
-                gameStartedB && team4.length > 0 && React.createElement("button", {
-                  onClick: () => declareWinner("B", "Team 3"),
-                  className: "mt-2 w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                }, `${team3Label} Wins`)
-              ),
-              React.createElement("div", null,
-                React.createElement("h3", { className: "text-lg font-semibold mb-2" }, team4Label),
-                React.createElement("ul", { className: "space-y-2" },
-                  team4.map(id => React.createElement("li", { key: id }, getPlayerName(id)))
-                ),
-                gameStartedB && team4.length > 0 && React.createElement("button", {
-                  onClick: () => declareWinner("B", "Team 4"),
-                  className: "mt-2 w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                }, `${team4Label} Wins`)
-              )
-            ),
-            React.createElement("div", { className: "flex justify-center space-x-4 mt-4" },
-              React.createElement("button", {
-                onClick: () => startFirstGame("B"),
-                disabled: gameStartedB || totalCount < 16,
-                className: "bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-              }, "Start First Game: Court B"),
-              React.createElement("button", {
-                onClick: () => startNextGame("B"),
-                disabled: totalCount < 16 || team4.length > 0,
-                className: "bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-              }, "Start Next Game: Court B")
-            )
-          )
-        ),
-        React.createElement("div", { className: "flex flex-col items-center space-y-4" },
-          React.createElement("div", { className: "flex justify-center space-x-4" },
-            React.createElement("button", { onClick: clearAll, className: "bg-red-700 text-white px-4 py-2 rounded-lg hover:bg-red-800" }, "Clear All")
-          ),
-          React.createElement("div", { className: "bg-white p-4 rounded shadow w-full max-w-md" },
-            React.createElement("h3", { className: "text-lg font-semibold mb-2" }, `Game Mode: ${gameMode}`),
-            React.createElement("div", { className: "flex space-x-2" },
-              React.createElement("select", {
-                value: gameMode,
-                onChange: handleGameModeChange,
-                className: "flex-1 p-2 border rounded-lg"
-              },
-                React.createElement("option", { value: "5x5" }, "5x5"),
-                React.createElement("option", { value: "4x4" }, "4x4"),
-                React.createElement("option", { value: "3x3" }, "3x3")
-              )
-            )
-          ),
-          React.createElement("div", { className: "bg-white p-4 rounded shadow w-full max-w-md" },
-            React.createElement("h3", { className: "text-lg font-semibold mb-2" }, `Max Wins Limit: ${maxWinsLimit}`),
-            React.createElement("div", { className: "flex flex-col space-y-2" },
-              React.createElement("div", { className: "flex space-x-2" },
-                React.createElement("input", {
-                  type: "number",
-                  value: maxWinsInput,
-                  onChange: (e) => { setMaxWinsInput(e.target.value); setMaxWinsError(null); },
-                  placeholder: "Enter max wins",
-                  className: "flex-1 p-2 border rounded-lg"
-                }),
+                  onClick: confirmWinner,
+                  className: "bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                }, "Confirm"),
                 React.createElement("button", {
-                  onClick: setMaxWins,
-                  className: "bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                }, "Set")
-              ),
-              maxWinsError && React.createElement("p", { className: "text-red-500 text-sm" }, maxWinsError)
+                  onClick: cancelWinnerConfirmation,
+                  className: "bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600"
+                }, "Cancel")
+              )
+            )
+          ),
+          pendingStart && React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" },
+            React.createElement("div", { className: "bg-white p-6 rounded-lg shadow-lg max-w-md w-full" },
+              React.createElement("h3", { className: "text-lg font-semibold mb-4" }, 
+                `Are you sure you want to start the next game on Court ${pendingStart}, placing ` +
+                `${pendingStart === "A" ? team2Label : team4Label} ` +
+                `(Players: ${nextTeam.map(getPlayerName).join(", ") || "None"}) from the Next Team?`),
+              React.createElement("p", { className: "text-sm mb-4" }, 
+                `Current winning team: ${pendingStart === "A" ? team1Label : team3Label} ` +
+                `with a win streak of ${pendingStart === "A" ? team1Wins : team3Wins}.`),
+              (pendingStart === "A" && team1Wins === maxWinsLimit - 1 || 
+               pendingStart === "B" && team3Wins === maxWinsLimit - 1) && 
+                React.createElement("p", { className: "text-sm text-red-500 mb-4" }, 
+                  "This is the last game for the current winning team."),
+              React.createElement("div", { className: "flex justify-end space-x-4" },
+                React.createElement("button", {
+                  onClick: confirmStartNextGame,
+                  className: "bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                }, "Confirm"),
+                React.createElement("button", {
+                  onClick: cancelStartNextGame,
+                  className: "bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600"
+                }, "Cancel")
+              )
             )
           )
         ),
         React.createElement("div", { className: "bg-white p-4 rounded shadow" },
-          React.createElement("h2", { className: "text-xl font-semibold mb-2" }, "Scoreboard"),
-          React.createElement("table", { className: "w-full text-center" },
-            React.createElement("thead", null,
-              React.createElement("tr", { className: "bg-gray-200" },
-                React.createElement("th", { className: "p-2" }, "Name"),
-                React.createElement("th", { className: "p-2" }, "Wins"),
-                React.createElement("th", { className: "p-2" }, "Win Streak"),
-                React.createElement("th", { className: "p-2" }, "Losses")
+          React.createElement("h2", { className: "text-xl font-semibold mb-2" }, "How We Play Around Here"),
+          React.createElement("ul", { className: "list-disc list-inside space-y-2" },
+            React.createElement("li", null, "Love God, Love Others, Be Grateful!"),
+            React.createElement("li", null, "Respect Each Other; Respect the Call."),
+            React.createElement("li", null, "Minimum Age: 16")
+          )
+        ),
+        React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4" },
+          React.createElement("div", { className: "space-y-6" },
+            React.createElement("div", { className: "bg-white p-4 rounded shadow" },
+              React.createElement("h2", { className: "text-xl font-semibold mb-2" }, "Court A"),
+              React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4" },
+                React.createElement("div", null,
+                  React.createElement("h3", { className: "text-lg font-semibold mb-2" }, team1Label),
+                  React.createElement("ul", { className: "space-y-2" },
+                    team1.map(id => React.createElement("li", { key: id, className: "flex justify-between items-center" },
+                      React.createElement("p", null, getPlayerName(id)),
+                      React.createElement("button", { 
+                        onClick: () => startSwap(id, "team1"), 
+                        disabled: waitlist.length === 0,
+                        className: "bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
+                      }, "Swap")
+                    ))
+                  ),
+                  gameStartedA && team2.length > 0 && React.createElement("button", {
+                    onClick: () => initiateWinnerConfirmation("A", "Team 1"),
+                    className: "mt-2 w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700",
+                    disabled: pendingWinner !== null || pendingStart !== null
+                  }, `${team1Label} Wins`)
+                ),
+                React.createElement("div", null,
+                  React.createElement("h3", { className: "text-lg font-semibold mb-2" }, team2Label),
+                  React.createElement("ul", { className: "space-y-2" },
+                    team2.map(id => React.createElement("li", { key: id, className: "flex justify-between items-center" },
+                      React.createElement("p", null, getPlayerName(id)),
+                      React.createElement("button", { 
+                        onClick: () => startSwap(id, "team2"), 
+                        disabled: waitlist.length === 0,
+                        className: "bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
+                      }, "Swap")
+                    ))
+                  ),
+                  gameStartedA && team2.length > 0 && React.createElement("button", {
+                    onClick: () => initiateWinnerConfirmation("A", "Team 2"),
+                    className: "mt-2 w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700",
+                    disabled: pendingWinner !== null || pendingStart !== null
+                  }, `${team2Label} Wins`)
+                )
+              ),
+              React.createElement("div", { className: "flex justify-center space-x-4 mt-4" },
+                React.createElement("button", {
+                  onClick: () => startFirstGame("A"),
+                  disabled: gameStartedA || totalCount < (gameMode === "5x5" ? 10 : 8) || pendingWinner !== null || pendingStart !== null,
+                  className: "bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                }, "Start First Game: Court A"),
+                React.createElement("button", {
+                  onClick: () => initiateStartNextGame("A"),
+                  disabled: totalCount < (gameMode === "5x5" ? 10 : 8) || team2.length > 0 || pendingWinner !== null || pendingStart !== null,
+                  className: "bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                }, "Start Next Game: Court A")
               )
             ),
-            React.createElement("tbody", null,
-              players.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())).map(p => React.createElement("tr", {
-                key: p.id,
-                className: p.wins === maxWins && maxWins > 0 ? "bg-yellow-200" : ""
-              },
-                React.createElement("td", { className: "p-2" }, p.name),
-                React.createElement("td", { className: "p-2" }, p.wins),
-                React.createElement("td", { className: "p-2" }, p.winStreak),
-                React.createElement("td", { className: "p-2" }, p.losses)
-              ))
+            gameMode === "4x4" && React.createElement("div", { className: "bg-white p-4 rounded shadow" },
+              React.createElement("h2", { className: "text-xl font-semibold mb-2" }, "Court B"),
+              React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4" },
+                React.createElement("div", null,
+                  React.createElement("h3", { className: "text-lg font-semibold mb-2" }, team3Label),
+                  React.createElement("ul", { className: "space-y-2" },
+                    team3.map(id => React.createElement("li", { key: id, className: "flex justify-between items-center" },
+                      React.createElement("p", null, getPlayerName(id)),
+                      React.createElement("button", { 
+                        onClick: () => startSwap(id, "team3"), 
+                        disabled: waitlist.length === 0,
+                        className: "bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
+                      }, "Swap")
+                    ))
+                  ),
+                  gameStartedB && team4.length > 0 && React.createElement("button", {
+                    onClick: () => initiateWinnerConfirmation("B", "Team 3"),
+                    className: "mt-2 w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700",
+                    disabled: pendingWinner !== null || pendingStart !== null
+                  }, `${team3Label} Wins`)
+                ),
+                React.createElement("div", null,
+                  React.createElement("h3", { className: "text-lg font-semibold mb-2" }, team4Label),
+                  React.createElement("ul", { className: "space-y-2" },
+                    team4.map(id => React.createElement("li", { key: id, className: "flex justify-between items-center" },
+                      React.createElement("p", null, getPlayerName(id)),
+                      React.createElement("button", { 
+                        onClick: () => startSwap(id, "team4"), 
+                        disabled: waitlist.length === 0,
+                        className: "bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
+                      }, "Swap")
+                    ))
+                  ),
+                  gameStartedB && team4.length > 0 && React.createElement("button", {
+                    onClick: () => initiateWinnerConfirmation("B", "Team 4"),
+                    className: "mt-2 w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700",
+                    disabled: pendingWinner !== null || pendingStart !== null
+                  }, `${team4Label} Wins`)
+                )
+              ),
+              React.createElement("div", { className: "flex justify-center space-x-4 mt-4" },
+                React.createElement("button", {
+                  onClick: () => startFirstGame("B"),
+                  disabled: gameStartedB || totalCount < 16 || pendingWinner !== null || pendingStart !== null,
+                  className: "bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                }, "Start First Game: Court B"),
+                React.createElement("button", {
+                  onClick: () => initiateStartNextGame("B"),
+                  disabled: totalCount < 16 || team4.length > 0 || pendingWinner !== null || pendingStart !== null,
+                  className: "bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                }, "Start Next Game: Court B")
+              )
             )
           ),
-          React.createElement("button", { onClick: clearScores, className: "mt-2 bg-red-700 text-white px-4 py-2 rounded-lg hover:bg-red-800" }, "Clear All Scores")
+          React.createElement("div", { className: "space-y-6" },
+            React.createElement("div", { className: "flex flex-col items-center space-y-4" },
+              React.createElement("div", { className: "flex justify-center space-x-4" },
+                React.createElement("button", { 
+                  onClick: clearAll, 
+                  className: "bg-red-700 text-white px-4 py-2 rounded-lg hover:bg-red-800" 
+                }, "Clear All")
+              ),
+              React.createElement("div", { className: "bg-white p-4 rounded shadow w-full max-w-md" },
+                React.createElement("h3", { className: "text-lg font-semibold mb-2" }, `Game Mode: ${gameMode}`),
+                React.createElement("div", { className: "flex space-x-2" },
+                  React.createElement("select", {
+                    value: gameMode,
+                    onChange: handleGameModeChange,
+                    className: "flex-1 p-2 border rounded-lg"
+                  },
+                    React.createElement("option", { value: "5x5" }, "5x5"),
+                    React.createElement("option", { value: "4x4" }, "4x4"),
+                    React.createElement("option", { value: "3x3" }, "3x3")
+                  )
+                )
+              ),
+              React.createElement("div", { className: "bg-white p-4 rounded shadow w-full max-w-md" },
+                React.createElement("h3", { className: "text-lg font-semibold mb-2" }, `Max Wins Limit: ${maxWinsLimit}`),
+                React.createElement("div", { className: "flex flex-col space-y-2" },
+                  React.createElement("div", { className: "flex space-x-2" },
+                    React.createElement("input", {
+                      type: "number",
+                      value: maxWinsInput,
+                      onChange: (e) => { setMaxWinsInput(e.target.value); setMaxWinsError(null); },
+                      placeholder: "Enter max wins",
+                      className: "flex-1 p-2 border rounded-lg"
+                    }),
+                    React.createElement("button", {
+                      onClick: setMaxWins,
+                      className: "bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                    }, "Set")
+                  ),
+                  maxWinsError && React.createElement("p", { className: "text-red-500 text-sm" }, maxWinsError)
+                )
+              )
+            ),
+            React.createElement("div", { className: "bg-white p-4 rounded shadow" },
+              React.createElement("h2", { className: "text-xl font-semibold mb-2" }, "Scoreboard"),
+              React.createElement("table", { className: "w-full text-center" },
+                React.createElement("thead", null,
+                  React.createElement("tr", { className: "bg-gray-200" },
+                    React.createElement("th", { className: "p-2" }, "Name"),
+                    React.createElement("th", { className: "p-2" }, "Wins"),
+                    React.createElement("th", { className: "p-2" }, "Win Streak"),
+                    React.createElement("th", { className: "p-2" }, "Losses")
+                  )
+                ),
+                React.createElement("tbody", null,
+                  players.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())).map(p => 
+                    React.createElement("tr", {
+                      key: p.id,
+                      className: p.wins === maxWins && maxWins > 0 ? "bg-yellow-200" : ""
+                    },
+                      React.createElement("td", { className: "p-2" }, p.name),
+                      React.createElement("td", { className: "p-2" }, p.wins),
+                      React.createElement("td", { className: "p-2" }, p.winStreak),
+                      React.createElement("td", { className: "p-2" }, p.losses)
+                    )
+                  )
+                )
+              ),
+              React.createElement("button", { 
+                onClick: clearScores, 
+                className: "mt-2 bg-red-700 text-white px-4 py-2 rounded-lg hover:bg-red-800" 
+              }, "Clear All Scores")
+            )
+          )
         )
       );
     });
