@@ -1229,7 +1229,7 @@
                 )
               ),
               React.createElement("div", { className: "bg-white p-4 rounded shadow w-full max-w-md" },
-                React.createElement("h3", { className: "text-lg font-semibold mb-2" }, `Leader Board: ${maxWinsLimit}`),
+                React.createElement("h3", { className: "text-lg font-semibold mb-2" }, `Max Wins: ${maxWinsLimit}`),
                 React.createElement("div", { className: "flex space-x-2" },
                   React.createElement("input", {
                     type: "number",
@@ -1248,7 +1248,7 @@
               React.createElement("div", { className: "bg-white p-4 rounded shadow w-full max-w-md" },
                 React.createElement("h3", { className: "text-lg font-semibold mb-2" }, "Player Stats"),
                 maxWins > 0 && React.createElement("p", { className: "mb-2" }, 
-                  `Max Wins: ${maxWins} by `,
+                  `Leader Board: ${maxWins} by `,
                   players
                     .filter(p => p.wins === maxWins)
                     .map(p => p.name)
