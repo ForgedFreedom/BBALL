@@ -11,6 +11,7 @@
 <body class="bg-gray-100">
   <div id="root" className="container mx-auto p-4">App failed to load. Check console for errors.</div>
   <script type="text/javascript">
+    // Version: 1.0.20 - 2025-08-04 - Extended swap modal to allow team-to-team (e.g., Team 1 ↔ Team 2, Team 3 ↔ Team 4) and team-to-Next-Team swaps, excluding same-team swaps
     // Version: 1.0.19 - 2025-06-29 - Fixed Start Fresh Game on Court A in 4x4 mode to only refresh Court A, not both courts
     // Version: 1.0.18 - 2025-06-29 - Fixed syntax error in startFirstGame for 4x4 mode Court A (8-15 players)
     // Version: 1.0.17 - 2025-06-29 - Changed "Leader Board:" to "Leader Board Wins:" in Player Stats; added new lines for team references in confirmation messages
@@ -317,72 +318,120 @@
       const startSwap = React.useCallback((id, sourceList) => {
         console.log("startSwap called for player ID:", id, "Name:", getPlayerName(id), 
                     "SourceList:", sourceList);
-        if (waitlist.length === 0) {
-          setSwapError("No players available on Waitlist to swap.");
-          console.log("startSwap: Aborted - Waitlist empty.");
+        // Determine valid target lists for the swap, excluding the source list
+        const validTargetLists = [];
+        if (sourceList !== "waitlist" && waitlist.length > 0) {
+          validTargetLists.push("waitlist");
+        }
+        if (sourceList !== "nextTeam" && nextTeam.length > 0) {
+          validTargetLists.push("nextTeam");
+        }
+        if (sourceList !== "team1" && team1.length > 0 && (sourceList === "team2" || sourceList === "waitlist" || sourceList === "pausedList" || sourceList === "nextTeam")) {
+          validTargetLists.push("team1");
+        }
+        if (sourceList !== "team2" && team2.length > 0 && (sourceList === "team1" || sourceList === "waitlist" || sourceList === "pausedList" || sourceList === "nextTeam")) {
+          validTargetLists.push("team2");
+        }
+        if (sourceList !== "team3" && team3.length > 0 && (sourceList === "team4" || sourceList === "waitlist" || sourceList === "pausedList" || sourceList === "nextTeam") && gameMode === "4x4") {
+          validTargetLists.push("team3");
+        }
+        if (sourceList !== "team4" && team4.length > 0 && (sourceList === "team3" || sourceList === "waitlist" || sourceList === "pausedList" || sourceList === "nextTeam") && gameMode === "4x4") {
+          validTargetLists.push("team4");
+        }
+
+        if (validTargetLists.length === 0) {
+          setSwapError("No players available to swap with.");
+          console.log("startSwap: Aborted - No valid target lists.");
           return;
         }
-        setSwappingPlayer({ id, sourceList });
+        setSwappingPlayer({ id, sourceList, targetLists: validTargetLists });
         setSwapError(null);
-      }, [waitlist, getPlayerName]);
+      }, [waitlist, nextTeam, team1, team2, team3, team4, gameMode, getPlayerName]);
 
-      const completeSwap = React.useCallback((waitlistPlayerId) => {
-        if (!swappingPlayer || !waitlist.includes(waitlistPlayerId)) {
-          setSwapError("Invalid player selection for swap.");
-          console.warn("completeSwap: Invalid player IDs - SwappingPlayer:", swappingPlayer, "Waitlist:", waitlist);
+      const completeSwap = React.useCallback((targetPlayerId, targetList) => {
+        if (!swappingPlayer || !swappingPlayer.targetLists.includes(targetList)) {
+          setSwapError("Invalid target list or player selection for swap.");
+          console.warn("completeSwap: Invalid target - SwappingPlayer:", swappingPlayer, "TargetList:", targetList);
           setSwappingPlayer(null);
           return;
         }
         const { id: sourcePlayerId, sourceList } = swappingPlayer;
         console.log("completeSwap called. Swapping player ID:", sourcePlayerId, "Name:", getPlayerName(sourcePlayerId), 
                     "from", sourceList, 
-                    "with Waitlist player ID:", waitlistPlayerId, "Name:", getPlayerName(waitlistPlayerId));
+                    "with player ID:", targetPlayerId, "Name:", getPlayerName(targetPlayerId), 
+                    "from", targetList);
 
-        let isValid = false;
+        let isValidSource = false;
+        let isValidTarget = false;
         switch (sourceList) {
-          case "waitlist": isValid = waitlist.includes(sourcePlayerId); break;
-          case "pausedList": isValid = pausedList.includes(sourcePlayerId); break;
-          case "nextTeam": isValid = nextTeam.includes(sourcePlayerId); break;
-          case "team1": isValid = team1.includes(sourcePlayerId); break;
-          case "team2": isValid = team2.includes(sourcePlayerId); break;
-          case "team3": isValid = team3.includes(sourcePlayerId); break;
-          case "team4": isValid = team4.includes(sourcePlayerId); break;
+          case "waitlist": isValidSource = waitlist.includes(sourcePlayerId); break;
+          case "pausedList": isValidSource = pausedList.includes(sourcePlayerId); break;
+          case "nextTeam": isValidSource = nextTeam.includes(sourcePlayerId); break;
+          case "team1": isValidSource = team1.includes(sourcePlayerId); break;
+          case "team2": isValidSource = team2.includes(sourcePlayerId); break;
+          case "team3": isValidSource = team3.includes(sourcePlayerId); break;
+          case "team4": isValidSource = team4.includes(sourcePlayerId); break;
           default: console.warn("completeSwap: Invalid sourceList:", sourceList);
         }
-        if (!isValid) {
-          setSwapError("Source player not found in specified list.");
-          console.warn("completeSwap: Source player ID", sourcePlayerId, "not in", sourceList);
+        switch (targetList) {
+          case "waitlist": isValidTarget = waitlist.includes(targetPlayerId); break;
+          case "nextTeam": isValidTarget = nextTeam.includes(targetPlayerId); break;
+          case "team1": isValidTarget = team1.includes(targetPlayerId); break;
+          case "team2": isValidTarget = team2.includes(targetPlayerId); break;
+          case "team3": isValidTarget = team3.includes(targetPlayerId); break;
+          case "team4": isValidTarget = team4.includes(targetPlayerId); break;
+          default: console.warn("completeSwap: Invalid targetList:", targetList);
+        }
+        if (!isValidSource || !isValidTarget) {
+          setSwapError("Source or target player not found in specified lists.");
+          console.warn("completeSwap: Invalid player IDs - Source ID:", sourcePlayerId, "in", sourceList, 
+                       "Target ID:", targetPlayerId, "in", targetList);
           setSwappingPlayer(null);
           return;
         }
 
+        // Perform the swap
         switch (sourceList) {
           case "waitlist":
-            setWaitlist(prev => prev.map(id => id === sourcePlayerId ? waitlistPlayerId : id === waitlistPlayerId ? sourcePlayerId : id));
+            setWaitlist(prev => prev.map(id => id === sourcePlayerId ? targetPlayerId : id));
             break;
           case "pausedList":
-            setPausedList(prev => prev.filter(id => id !== sourcePlayerId).concat(waitlistPlayerId));
-            setWaitlist(prev => prev.filter(id => id !== waitlistPlayerId).concat(sourcePlayerId));
+            setPausedList(prev => prev.map(id => id === sourcePlayerId ? targetPlayerId : id));
             break;
           case "nextTeam":
-            setNextTeam(prev => prev.filter(id => id !== sourcePlayerId).concat(waitlistPlayerId));
-            setWaitlist(prev => prev.filter(id => id !== waitlistPlayerId).concat(sourcePlayerId));
+            setNextTeam(prev => prev.map(id => id === sourcePlayerId ? targetPlayerId : id));
             break;
           case "team1":
-            setTeam1(prev => prev.filter(id => id !== sourcePlayerId).concat(waitlistPlayerId));
-            setWaitlist(prev => prev.filter(id => id !== waitlistPlayerId).concat(sourcePlayerId));
+            setTeam1(prev => prev.map(id => id === sourcePlayerId ? targetPlayerId : id));
             break;
           case "team2":
-            setTeam2(prev => prev.filter(id => id !== sourcePlayerId).concat(waitlistPlayerId));
-            setWaitlist(prev => prev.filter(id => id !== waitlistPlayerId).concat(sourcePlayerId));
+            setTeam2(prev => prev.map(id => id === sourcePlayerId ? targetPlayerId : id));
             break;
           case "team3":
-            setTeam3(prev => prev.filter(id => id !== sourcePlayerId).concat(waitlistPlayerId));
-            setWaitlist(prev => prev.filter(id => id !== waitlistPlayerId).concat(sourcePlayerId));
+            setTeam3(prev => prev.map(id => id === sourcePlayerId ? targetPlayerId : id));
             break;
           case "team4":
-            setTeam4(prev => prev.filter(id => id !== sourcePlayerId).concat(waitlistPlayerId));
-            setWaitlist(prev => prev.filter(id => id !== waitlistPlayerId).concat(sourcePlayerId));
+            setTeam4(prev => prev.map(id => id === sourcePlayerId ? targetPlayerId : id));
+            break;
+        }
+        switch (targetList) {
+          case "waitlist":
+            setWaitlist(prev => prev.map(id => id === targetPlayerId ? sourcePlayerId : id));
+            break;
+          case "nextTeam":
+            setNextTeam(prev => prev.map(id => id === targetPlayerId ? sourcePlayerId : id));
+            break;
+          case "team1":
+            setTeam1(prev => prev.map(id => id === targetPlayerId ? sourcePlayerId : id));
+            break;
+          case "team2":
+            setTeam2(prev => prev.map(id => id === targetPlayerId ? sourcePlayerId : id));
+            break;
+          case "team3":
+            setTeam3(prev => prev.map(id => id === targetPlayerId ? sourcePlayerId : id));
+            break;
+          case "team4":
+            setTeam4(prev => prev.map(id => id === targetPlayerId ? sourcePlayerId : id));
             break;
         }
         setSwappingPlayer(null);
@@ -504,7 +553,6 @@
       const initiateFirstGame = React.useCallback((court) => {
         console.log(`initiateFirstGame called for Court: ${court}`);
         const teamSize = getTeamSize();
-        const minPlayers = gameMode === "5x5" ? teamSize * 2 : teamSize * 2;
         const newTeam1 = nextTeam.slice(0, teamSize);
         const newTeam2 = waitlist.slice(0, teamSize);
         const message = `Start fresh game on Court ${court}?<br/>Team 1 (${newTeam1.map(getPlayerName).join(", ")})<br/>vs<br/>Team 2 (${newTeam2.map(getPlayerName).join(", ")})`;
@@ -928,7 +976,7 @@
                 React.createElement("div", { className: "space-x-2" },
                   React.createElement("button", { 
                     onClick: () => startSwap(id, "waitlist"), 
-                    disabled: waitlist.length <= 1,
+                    disabled: waitlist.length <= 1 && nextTeam.length === 0 && team1.length === 0 && team2.length === 0 && team3.length === 0 && team4.length === 0,
                     className: "bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
                   }, "Swap"),
                   React.createElement("button", { 
@@ -951,7 +999,7 @@
                 React.createElement("div", { className: "space-x-2" },
                   React.createElement("button", { 
                     onClick: () => startSwap(id, "pausedList"), 
-                    disabled: waitlist.length === 0,
+                    disabled: waitlist.length === 0 && nextTeam.length === 0 && team1.length === 0 && team2.length === 0 && team3.length === 0 && team4.length === 0,
                     className: "bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
                   }, "Swap"),
                   React.createElement("button", { 
@@ -969,7 +1017,7 @@
                 React.createElement("p", null, getPlayerName(id)),
                 React.createElement("button", { 
                   onClick: () => startSwap(id, "nextTeam"), 
-                  disabled: waitlist.length === 0,
+                  disabled: waitlist.length === 0 && team1.length === 0 && team2.length === 0 && team3.length === 0 && team4.length === 0,
                   className: "bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
                 }, "Swap")
               ))
@@ -978,15 +1026,90 @@
           swappingPlayer && React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" },
             React.createElement("div", { className: "bg-white p-6 rounded-lg shadow-lg max-w-md w-full" },
               React.createElement("h3", { className: "text-lg font-semibold mb-4" }, 
-                `Select Waitlist Player to Swap with ${getPlayerName(swappingPlayer.id)}`),
-              React.createElement("ul", { className: "space-y-2 mb-4" },
-                waitlist.filter(id => id !== swappingPlayer.id).map(id => 
-                  React.createElement("li", { key: id, className: "flex justify-between items-center" },
-                    React.createElement("p", null, getPlayerName(id)),
-                    React.createElement("button", {
-                      onClick: () => completeSwap(id),
-                      className: "bg-blue-600 text-white px-2 py-1 rounded-lg hover:bg-blue-700"
-                    }, "Select")
+                `Select Player to Swap with ${getPlayerName(swappingPlayer.id)}`),
+              React.createElement("div", { className: "space-y-4 mb-4" },
+                swappingPlayer.targetLists.includes("waitlist") && waitlist.length > 0 && React.createElement("div", null,
+                  React.createElement("h4", { className: "font-semibold" }, "Waitlist"),
+                  React.createElement("ul", { className: "space-y-2" },
+                    waitlist.filter(id => id !== swappingPlayer.id).map(id => 
+                      React.createElement("li", { key: id, className: "flex justify-between items-center" },
+                        React.createElement("p", null, getPlayerName(id)),
+                        React.createElement("button", {
+                          onClick: () => completeSwap(id, "waitlist"),
+                          className: "bg-blue-600 text-white px-2 py-1 rounded-lg hover:bg-blue-700"
+                        }, "Select")
+                      )
+                    )
+                  )
+                ),
+                swappingPlayer.targetLists.includes("nextTeam") && nextTeam.length > 0 && React.createElement("div", null,
+                  React.createElement("h4", { className: "font-semibold" }, "Next Team"),
+                  React.createElement("ul", { className: "space-y-2" },
+                    nextTeam.filter(id => id !== swappingPlayer.id).map(id => 
+                      React.createElement("li", { key: id, className: "flex justify-between items-center" },
+                        React.createElement("p", null, getPlayerName(id)),
+                        React.createElement("button", {
+                          onClick: () => completeSwap(id, "nextTeam"),
+                          className: "bg-blue-600 text-white px-2 py-1 rounded-lg hover:bg-blue-700"
+                        }, "Select")
+                      )
+                    )
+                  )
+                ),
+                swappingPlayer.targetLists.includes("team1") && team1.length > 0 && React.createElement("div", null,
+                  React.createElement("h4", { className: "font-semibold" }, team1Label),
+                  React.createElement("ul", { className: "space-y-2" },
+                    team1.filter(id => id !== swappingPlayer.id).map(id => 
+                      React.createElement("li", { key: id, className: "flex justify-between items-center" },
+                        React.createElement("p", null, getPlayerName(id)),
+                        React.createElement("button", {
+                          onClick: () => completeSwap(id, "team1"),
+                          className: "bg-blue-600 text-white px-2 py-1 rounded-lg hover:bg-blue-700"
+                        }, "Select")
+                      )
+                    )
+                  )
+                ),
+                swappingPlayer.targetLists.includes("team2") && team2.length > 0 && React.createElement("div", null,
+                  React.createElement("h4", { className: "font-semibold" }, team2Label),
+                  React.createElement("ul", { className: "space-y-2" },
+                    team2.filter(id => id !== swappingPlayer.id).map(id => 
+                      React.createElement("li", { key: id, className: "flex justify-between items-center" },
+                        React.createElement("p", null, getPlayerName(id)),
+                        React.createElement("button", {
+                          onClick: () => completeSwap(id, "team2"),
+                          className: "bg-blue-600 text-white px-2 py-1 rounded-lg hover:bg-blue-700"
+                        }, "Select")
+                      )
+                    )
+                  )
+                ),
+                swappingPlayer.targetLists.includes("team3") && team3.length > 0 && React.createElement("div", null,
+                  React.createElement("h4", { className: "font-semibold" }, team3Label),
+                  React.createElement("ul", { className: "space-y-2" },
+                    team3.filter(id => id !== swappingPlayer.id).map(id => 
+                      React.createElement("li", { key: id, className: "flex justify-between items-center" },
+                        React.createElement("p", null, getPlayerName(id)),
+                        React.createElement("button", {
+                          onClick: () => completeSwap(id, "team3"),
+                          className: "bg-blue-600 text-white px-2 py-1 rounded-lg hover:bg-blue-700"
+                        }, "Select")
+                      )
+                    )
+                  )
+                ),
+                swappingPlayer.targetLists.includes("team4") && team4.length > 0 && React.createElement("div", null,
+                  React.createElement("h4", { className: "font-semibold" }, team4Label),
+                  React.createElement("ul", { className: "space-y-2" },
+                    team4.filter(id => id !== swappingPlayer.id).map(id => 
+                      React.createElement("li", { key: id, className: "flex justify-between items-center" },
+                        React.createElement("p", null, getPlayerName(id)),
+                        React.createElement("button", {
+                          onClick: () => completeSwap(id, "team4"),
+                          className: "bg-blue-600 text-white px-2 py-1 rounded-lg hover:bg-blue-700"
+                        }, "Select")
+                      )
+                    )
                   )
                 )
               ),
@@ -1063,7 +1186,7 @@
                       React.createElement("p", null, getPlayerName(id)),
                       React.createElement("button", { 
                         onClick: () => startSwap(id, "team1"), 
-                        disabled: waitlist.length === 0,
+                        disabled: waitlist.length === 0 && nextTeam.length === 0 && team2.length === 0,
                         className: "bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
                       }, "Swap")
                     ))
@@ -1080,7 +1203,7 @@
                       React.createElement("p", null, getPlayerName(id)),
                       React.createElement("button", { 
                         onClick: () => startSwap(id, "team2"), 
-                        disabled: waitlist.length === 0,
+                        disabled: waitlist.length === 0 && nextTeam.length === 0 && team1.length === 0,
                         className: "bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
                       }, "Swap")
                     ))
@@ -1114,7 +1237,7 @@
                       React.createElement("p", null, getPlayerName(id)),
                       React.createElement("button", { 
                         onClick: () => startSwap(id, "team3"), 
-                        disabled: waitlist.length === 0,
+                        disabled: waitlist.length === 0 && nextTeam.length === 0 && team4.length === 0,
                         className: "bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
                       }, "Swap")
                     ))
@@ -1131,14 +1254,14 @@
                       React.createElement("p", null, getPlayerName(id)),
                       React.createElement("button", { 
                         onClick: () => startSwap(id, "team4"), 
-                        disabled: waitlist.length === 0,
+                        disabled: waitlist.length === 0 && nextTeam.length === 0 && team3.length === 0,
                         className: "bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
                       }, "Swap")
                     ))
                   ),
                   gameStartedB && team4.length > 0 && React.createElement("button", {
                     onClick: () => initiateWinnerConfirmation("B", "Team 4"),
-                    className: "mt-2 w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                    className: "mt-2 w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
                   }, `${team4Label} Wins`)
                 )
               ),
@@ -1174,7 +1297,7 @@
                   React.createElement("select", {
                     value: gameMode,
                     onChange: handleGameModeChange,
-                    className: "flex-1 p-2 border rounded-lg"
+                    className: "p-2 border rounded-lg"
                   },
                     React.createElement("option", { value: "5x5" }, "5x5"),
                     React.createElement("option", { value: "4x4" }, "4x4"),
@@ -1183,7 +1306,7 @@
                 )
               ),
               React.createElement("div", { className: "bg-white p-4 rounded shadow w-full max-w-md" },
-                React.createElement("h3", { className: "text-lg font-semibold mb-2" }, `Max Wins: ${maxWinsLimit}`),
+                React.createElement("h3", { className: "text-lg font-semibold mb-2" }, `Max Wins Limit: ${maxWinsLimit}`),
                 React.createElement("div", { className: "flex space-x-2" },
                   React.createElement("input", {
                     type: "number",
