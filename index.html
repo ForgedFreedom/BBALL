@@ -11,6 +11,10 @@
 <body class="bg-gray-100">
   <div id="root" className="container mx-auto p-4">App failed to load. Check console for errors.</div>
   <script type="text/javascript">
+    // Version: 1.0.24 - 2025-08-19 - Restored Leader Board Wins above Player Stats; added Show/Hide Player Stats button
+    // Version: 1.0.23 - 2025-08-19 - Added Player Stats section below Player Signup
+    // Version: 1.0.22 - 2025-08-19 - Added Team Score section to display team win streaks side-by-side with How We Play Around Here
+    // Version: 1.0.21 - 2025-08-19 - Added confirmation modal for Clear All button
     // Version: 1.0.20 - 2025-08-04 - Extended swap modal to allow team-to-team (e.g., Team 1 ↔ Team 2, Team 3 ↔ Team 4) and team-to-Next-Team swaps, excluding same-team swaps
     // Version: 1.0.19 - 2025-06-29 - Fixed Start Fresh Game on Court A in 4x4 mode to only refresh Court A, not both courts
     // Version: 1.0.18 - 2025-06-29 - Fixed syntax error in startFirstGame for 4x4 mode Court A (8-15 players)
@@ -65,13 +69,13 @@
       const [pendingWinner, setPendingWinner] = React.useState(null);
       const [pendingStart, setPendingStart] = React.useState(null);
       const [pendingFirstStart, setPendingFirstStart] = React.useState(null);
+      const [pendingClearAll, setPendingClearAll] = React.useState(null);
+      const [showPlayerStats, setShowPlayerStats] = React.useState(true);
       const saveLogCount = React.useRef(0);
-      const MAX_SAVE_LOGS = 100; // Limit save logs to prevent console spam
+      const MAX_SAVE_LOGS = 100;
 
-      // Generate unique ID
       const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      // Memoized getPlayerName
       const getPlayerName = React.useCallback((id) => {
         const player = players.find(p => p.id === id);
         if (!player) {
@@ -81,7 +85,6 @@
         return player.name;
       }, [players]);
 
-      // Debounce function for localStorage
       const debounce = (func, wait) => {
         let timeout;
         return (...args) => {
@@ -90,7 +93,6 @@
         };
       };
 
-      // getTeamSize before useEffect
       const getTeamSize = React.useCallback(() => {
         switch (gameMode) {
           case "5x5": return 5;
@@ -100,7 +102,6 @@
         }
       }, [gameMode]);
 
-      // Load initial state
       React.useEffect(() => {
         try {
           const savedState = localStorage.getItem("bballManagerState");
@@ -135,31 +136,15 @@
         }
       }, []);
 
-      // Save state to localStorage with debounce
       React.useEffect(() => {
         const saveState = debounce(() => {
           if (saveLogCount.current < MAX_SAVE_LOGS) {
             try {
               const state = { 
-                players, 
-                waitlist, 
-                nextTeam, 
-                team1, 
-                team2, 
-                team3, 
-                team4, 
-                team1Wins, 
-                team3Wins, 
-                gameStartedA, 
-                gameStartedB, 
-                postMaxOutA,
-                postMaxOutB,
-                team1Label, 
-                team2Label, 
-                team3Label, 
-                team4Label, 
-                maxWinsLimit, 
-                gameMode, 
+                players, waitlist, nextTeam, team1, team2, team3, team4, 
+                team1Wins, team3Wins, gameStartedA, gameStartedB, 
+                postMaxOutA, postMaxOutB, team1Label, team2Label, 
+                team3Label, team4Label, maxWinsLimit, gameMode, 
                 lastWinnerCourtA 
               };
               localStorage.setItem("bballManagerState", JSON.stringify(state));
@@ -182,7 +167,6 @@
         return () => clearTimeout(saveState);
       }, [players, waitlist, nextTeam, team1, team2, team3, team4, team1Wins, team3Wins, gameStartedA, gameStartedB, postMaxOutA, postMaxOutB, maxWinsLimit, gameMode, getPlayerName]);
 
-      // Simplified fillNextTeam
       const fillNextTeam = React.useCallback(() => {
         if (gameMode === "3x3") {
           console.log(`fillNextTeam: ${gameMode} mode not implemented yet.`);
@@ -215,7 +199,6 @@
                     "NextTeam:", newNextTeam.map(getPlayerName));
       }, [players, waitlist, nextTeam, gameMode, getPlayerName, getTeamSize]);
 
-      // fillNextTeam useEffect
       React.useEffect(() => {
         const teamSize = getTeamSize();
         if (nextTeam.length >= teamSize || waitlist.length === 0) {
@@ -229,7 +212,6 @@
         fillNextTeam();
       }, [waitlist, nextTeam, gameMode, getPlayerName, fillNextTeam, getTeamSize]);
 
-      // Debug UI rendering
       React.useEffect(() => {
         console.log("UI Rendering - Waitlist:", waitlist.map(getPlayerName), 
                     "NextTeam:", nextTeam.map(getPlayerName));
@@ -318,7 +300,6 @@
       const startSwap = React.useCallback((id, sourceList) => {
         console.log("startSwap called for player ID:", id, "Name:", getPlayerName(id), 
                     "SourceList:", sourceList);
-        // Determine valid target lists for the swap, excluding the source list
         const validTargetLists = [];
         if (sourceList !== "waitlist" && waitlist.length > 0) {
           validTargetLists.push("waitlist");
@@ -390,7 +371,6 @@
           return;
         }
 
-        // Perform the swap
         switch (sourceList) {
           case "waitlist":
             setWaitlist(prev => prev.map(id => id === sourcePlayerId ? targetPlayerId : id));
@@ -459,8 +439,8 @@
           return;
         }
         const teamSize = getTeamSize();
-        const minPlayers = gameMode === "5x5" ? teamSize * 2 : teamSize * 2; // 10 for 5x5, 8 for 4x4
-        const minPlayersBothCourts = gameMode === "4x4" ? teamSize * 4 : teamSize * 2; // 16 for 4x4, 10 for 5x5
+        const minPlayers = gameMode === "5x5" ? teamSize * 2 : teamSize * 2;
+        const minPlayersBothCourts = gameMode === "4x4" ? teamSize * 4 : teamSize * 2;
         console.log(`startFirstGame ${court}: Checking conditions - `, {
           gameMode,
           totalCount,
@@ -494,7 +474,6 @@
         }
 
         if (gameMode === "4x4" && court === "A" && (!gameStartedA || postMaxOutA)) {
-          // Start game on Court A only
           console.log(`startFirstGame: Starting 4x4 on Court A with ${totalCount} players.`);
           setGameStartedA(true);
           setPostMaxOutA(false);
@@ -766,7 +745,7 @@
             setTeam3Label(newTeam3Label);
             setTeam4Label(newTeam4Label);
             setPostMaxOutB(false);
-            console.log(`declareWinner: Court B - Team3: ${newTeam3.map(getPlayerName)}, Waitlist: ${[...newWaitlist, ...losers].map(getPlayerName)}`);
+            console.log(`declare Winner: Court B - Team3: ${newTeam3.map(getPlayerName)}, Waitlist: ${[...newWaitlist, ...losers].map(getPlayerName)}`);
             fillNextTeam();
           }
         }
@@ -886,7 +865,18 @@
         }
       }, [gameMode, totalCount, gameStartedA, gameStartedB, lastWinnerCourtA, nextTeam, waitlist]);
 
-      const clearAll = React.useCallback(() => {
+      const initiateClearAll = React.useCallback(() => {
+        console.log("initiateClearAll called.");
+        const message = `Are you sure you want to clear all players, teams, and game state? This action cannot be undone.`;
+        setPendingClearAll({ message });
+      }, []);
+
+      const confirmClearAll = React.useCallback(() => {
+        if (!pendingClearAll) {
+          console.warn("confirmClearAll: No pending clear to confirm.");
+          return;
+        }
+        console.log("confirmClearAll: Confirmed clear all.");
         setPlayers([]);
         setWaitlist([]);
         setPausedList([]);
@@ -913,16 +903,29 @@
         setPendingWinner(null);
         setPendingStart(null);
         setPendingFirstStart(null);
+        setPendingClearAll(null);
+        setShowPlayerStats(true);
         saveLogCount.current = 0;
-        console.log("clearAll: Reset all state");
-      }, []);
+        console.log("confirmClearAll: Reset all state");
+      }, [pendingClearAll]);
+
+      const cancelClearAll = React.useCallback(() => {
+        console.log("cancelClearAll called. Clearing pendingClearAll:", pendingClearAll);
+        setPendingClearAll(null);
+      }, [pendingClearAll]);
 
       const clearScores = React.useCallback(() => {
         setPlayers(prev => prev.map(p => ({ ...p, wins: 0, losses: 0, winStreak: 0 })));
         console.log("clearScores: Reset all player scores");
       }, []);
 
+      const togglePlayerStats = React.useCallback(() => {
+        setShowPlayerStats(prev => !prev);
+        console.log("togglePlayerStats: Toggled to", !showPlayerStats);
+      }, [showPlayerStats]);
+
       const maxWins = Math.max(...players.map(p => p.wins), 0);
+      const topWinners = players.filter(p => p.wins === maxWins).map(p => p.name);
       const waitlistCount = new Set([...waitlist]).size;
       const pausedCount = pausedList.length;
 
@@ -965,6 +968,49 @@
               }, "Sign Up")
             ),
             signupError && React.createElement("p", { className: "text-red-500 text-sm" }, signupError)
+          )
+        ),
+        React.createElement("div", { className: "bg-white p-4 rounded shadow" },
+          React.createElement("div", { className: "flex justify-between items-center mb-2" },
+            React.createElement("h2", { className: "text-xl font-semibold" }, "Player Stats"),
+            React.createElement("button", {
+              onClick: togglePlayerStats,
+              className: "bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+            }, showPlayerStats ? "Hide Player Stats" : "Show Player Stats")
+          ),
+          showPlayerStats && React.createElement("div", { className: "space-y-4" },
+            React.createElement("div", null,
+              React.createElement("h3", { className: "text-lg font-semibold mb-2" }, "Leader Board Wins"),
+              maxWins > 0 ? 
+                React.createElement("p", null, `Leader(s): ${topWinners.join(", ")} with ${maxWins} win${maxWins > 1 ? "s" : ""}`) :
+                React.createElement("p", null, "No wins recorded yet.")
+            ),
+            React.createElement("div", { className: "overflow-x-auto" },
+              React.createElement("table", { className: "w-full table-auto" },
+                React.createElement("thead", null,
+                  React.createElement("tr", { className: "bg-gray-200" },
+                    React.createElement("th", { className: "px-4 py-2 text-left" }, "Player"),
+                    React.createElement("th", { className: "px-4 py-2 text-left" }, "Wins"),
+                    React.createElement("th", { className: "px-4 py-2 text-left" }, "Losses"),
+                    React.createElement("th", { className: "px-4 py-2 text-left" }, "Win Streak")
+                  )
+                ),
+                React.createElement("tbody", null,
+                  players.length > 0 ? 
+                    players.map(player => 
+                      React.createElement("tr", { key: player.id, className: "border-b" },
+                        React.createElement("td", { className: "px-4 py-2" }, player.name),
+                        React.createElement("td", { className: "px-4 py-2" }, player.wins),
+                        React.createElement("td", { className: "px-4 py-2" }, player.losses),
+                        React.createElement("td", { className: "px-4 py-2" }, player.winStreak)
+                      )
+                    ) :
+                    React.createElement("tr", null,
+                      React.createElement("td", { colSpan: 4, className: "px-4 py-2 text-center" }, "No players added yet.")
+                    )
+                )
+              )
+            )
           )
         ),
         React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-4" },
@@ -1164,14 +1210,52 @@
                 }, "Cancel")
               )
             )
+          ),
+          pendingClearAll && React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" },
+            React.createElement("div", { className: "bg-white p-6 rounded-lg shadow-lg max-w-md w-full" },
+              React.createElement("h3", { className: "text-lg font-semibold mb-4" }, pendingClearAll.message),
+              React.createElement("div", { className: "flex justify-end space-x-4" },
+                React.createElement("button", {
+                  onClick: confirmClearAll,
+                  className: "bg-red-700 text-white px-4 py-2 rounded-lg hover:bg-red-800"
+                }, "Confirm"),
+                React.createElement("button", {
+                  onClick: cancelClearAll,
+                  className: "bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600"
+                }, "Cancel")
+              )
+            )
           )
         ),
-        React.createElement("div", { className: "bg-white p-4 rounded shadow" },
-          React.createElement("h2", { className: "text-xl font-semibold mb-2" }, "How We Play Around Here"),
-          React.createElement("ul", { className: "list-disc list-inside space-y-2" },
-            React.createElement("li", null, "Love God, Love Others, Be Grateful!"),
-            React.createElement("li", null, "Respect Each Other; Respect the Call."),
-            React.createElement("li", null, "Minimum Age: 16")
+        React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4" },
+          React.createElement("div", { className: "bg-white p-4 rounded shadow" },
+            React.createElement("h2", { className: "text-xl font-semibold mb-2" }, "How We Play Around Here"),
+            React.createElement("ul", { className: "list-disc list-inside space-y-2" },
+              React.createElement("li", null, "Love God, Love Others, Be Grateful!"),
+              React.createElement("li", null, "Respect Each Other; Respect the Call."),
+              React.createElement("li", null, "Minimum Age: 16")
+            )
+          ),
+          React.createElement("div", { className: "bg-white p-4 rounded shadow" },
+            React.createElement("h2", { className: "text-xl font-semibold mb-2" }, "Team Score"),
+            React.createElement("ul", { className: "space-y-2" },
+              React.createElement("li", { className: "flex justify-between" },
+                React.createElement("span", null, team1Label),
+                React.createElement("span", null, `Win Streak: ${team1Wins}`)
+              ),
+              React.createElement("li", { className: "flex justify-between" },
+                React.createElement("span", null, team2Label),
+                React.createElement("span", null, `Win Streak: ${team2.length > 0 ? 0 : '-'}`)
+              ),
+              gameMode === "4x4" && React.createElement("li", { className: "flex justify-between" },
+                React.createElement("span", null, team3Label),
+                React.createElement("span", null, `Win Streak: ${team3Wins}`)
+              ),
+              gameMode === "4x4" && React.createElement("li", { className: "flex justify-between" },
+                React.createElement("span", null, team4Label),
+                React.createElement("span", null, `Win Streak: ${team4.length > 0 ? 0 : '-'}`)
+              )
+            )
           )
         ),
         React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4" },
@@ -1283,58 +1367,38 @@
             React.createElement("div", { className: "flex flex-col items-center space-y-4" },
               React.createElement("div", { className: "flex justify-center space-x-4" },
                 React.createElement("button", { 
-                  onClick: clearAll, 
+                  onClick: initiateClearAll, 
                   className: "bg-red-700 text-white px-4 py-2 rounded-lg hover:bg-red-800" 
                 }, "Clear All"),
                 React.createElement("button", { 
                   onClick: clearScores, 
-                  className: "bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700" 
+                  className: "bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700" 
                 }, "Clear Scores")
               ),
-              React.createElement("div", { className: "bg-white p-4 rounded shadow w-full max-w-md" },
-                React.createElement("h3", { className: "text-lg font-semibold mb-2" }, `Game Mode: ${gameMode}`),
-                React.createElement("div", { className: "flex space-x-2" },
-                  React.createElement("select", {
-                    value: gameMode,
-                    onChange: handleGameModeChange,
-                    className: "p-2 border rounded-lg"
-                  },
-                    React.createElement("option", { value: "5x5" }, "5x5"),
-                    React.createElement("option", { value: "4x4" }, "4x4"),
-                    React.createElement("option", { value: "3x3" }, "3x3")
-                  )
-                )
+              React.createElement("div", { className: "flex space-x-2 items-center" },
+                React.createElement("input", {
+                  type: "number",
+                  value: maxWinsInput,
+                  onChange: (e) => { setMaxWinsInput(e.target.value); setMaxWinsError(null); },
+                  placeholder: "Set Max Wins",
+                  className: "p-2 border rounded-lg w-32"
+                }),
+                React.createElement("button", {
+                  onClick: setMaxWins,
+                  className: "bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                }, "Set")
               ),
-              React.createElement("div", { className: "bg-white p-4 rounded shadow w-full max-w-md" },
-                React.createElement("h3", { className: "text-lg font-semibold mb-2" }, `Max Wins Limit: ${maxWinsLimit}`),
-                React.createElement("div", { className: "flex space-x-2" },
-                  React.createElement("input", {
-                    type: "number",
-                    value: maxWinsInput,
-                    onChange: (e) => { setMaxWinsInput(e.target.value); setMaxWinsError(null); },
-                    placeholder: "Set max wins",
-                    className: "flex-1 p-2 border rounded-lg"
-                  }),
-                  React.createElement("button", {
-                    onClick: setMaxWins,
-                    className: "bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                  }, "Set")
-                ),
-                maxWinsError && React.createElement("p", { className: "text-red-500 text-sm mt-2" }, maxWinsError)
-              ),
-              React.createElement("div", { className: "bg-white p-4 rounded shadow w-full max-w-md" },
-                React.createElement("h3", { className: "text-lg font-semibold mb-2" }, "Player Stats"),
-                maxWins > 0 && React.createElement("p", { className: "mb-2" }, 
-                  `Leader Board Wins: ${maxWins} by `,
-                  players
-                    .filter(p => p.wins === maxWins)
-                    .map(p => p.name)
-                    .join(", ")
-                ),
-                React.createElement("ul", { className: "space-y-2" },
-                  players.map(p => React.createElement("li", { key: p.id, className: "flex justify-between" },
-                    React.createElement("p", null, `${p.name}: ${p.wins}W-${p.losses}L (Streak: ${p.winStreak})`)
-                  ))
+              maxWinsError && React.createElement("p", { className: "text-red-500 text-sm" }, maxWinsError),
+              React.createElement("div", { className: "flex space-x-2 items-center" },
+                React.createElement("label", { htmlFor: "gameMode", className: "font-semibold" }, "Game Mode:"),
+                React.createElement("select", {
+                  id: "gameMode",
+                  value: gameMode,
+                  onChange: handleGameModeChange,
+                  className: "p-2 border rounded-lg"
+                },
+                  React.createElement("option", { value: "5x5" }, "5x5"),
+                  React.createElement("option", { value: "4x4" }, "4x4")
                 )
               )
             )
@@ -1343,7 +1407,7 @@
       );
     });
 
-    ReactDOM.render(React.createElement(App), document.getElementById("root"));
+    ReactDOM.render(React.createElement(App), document.getElementById('root'));
   </script>
 </body>
 </html>
