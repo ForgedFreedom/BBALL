@@ -57,8 +57,9 @@ export const useBballManager = () => {
   const [pendingFirstStart, setPendingFirstStart] = React.useState(null);
   const [pendingClearAll, setPendingClearAll] = React.useState(null);
   const [pendingNotEnoughPlayers, setPendingNotEnoughPlayers] = React.useState(null);
-  const [showPlayerStats, setShowPlayerStats] = React.useState(true);
+  const [showPlayerStats, setShowPlayerStats] = React.useState(false);
   const [showActivityLog, setShowActivityLog] = React.useState(false);
+  const [showSettings, setShowSettings] = React.useState(false);
   const [activityLog, setActivityLog] = React.useState([]);
 
   // Undo (single most-recent action, per action type)
@@ -706,8 +707,9 @@ export const useBballManager = () => {
     setPendingStart(null);
     setPendingFirstStart(null);
     setPendingNotEnoughPlayers(null);
-    setShowPlayerStats(true);
+    setShowPlayerStats(false);
     setShowActivityLog(false);
+    setShowSettings(false);
     setActivityLog([]);
     setLastSwapUndo(null);
     setLastWinnerUndoA(null);
@@ -1007,6 +1009,7 @@ export const useBballManager = () => {
     pendingNotEnoughPlayers,
     showPlayerStats,
     showActivityLog,
+    showSettings,
     activityLog,
     totalCount,
     maxWins,
@@ -1058,6 +1061,7 @@ export const useBballManager = () => {
     getTeamSize,
     setShowPlayerStats,
     setShowActivityLog,
+    setShowSettings,
     toggleLockdown,
     submitLockdownCode,
     cancelLockdownPrompt,

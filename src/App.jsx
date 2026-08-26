@@ -57,6 +57,7 @@ function App() {
     setPendingNotEnoughPlayers,
     showPlayerStats,
     showActivityLog,
+    showSettings,
     activityLog,
     totalCount,
     maxWins,
@@ -104,6 +105,7 @@ function App() {
     getPlayerName,
     setShowPlayerStats,
     setShowActivityLog,
+    setShowSettings,
     toggleLockdown,
     submitLockdownCode,
     cancelLockdownPrompt,
@@ -253,34 +255,47 @@ function App() {
         />
 
         <section className="panel settings-panel">
-          <h2>Settings</h2>
-          <GameModePanel gameMode={gameMode} onChange={handleGameModeChange} />
-          {gameModeError && <p className="error">{gameModeError}</p>}
-
-          <MaxWinsPanel
-            maxWinsLimit={maxWinsLimit}
-            maxWinsInput={maxWinsInput}
-            maxWinsError={maxWinsError}
-            onChange={handleMaxWinsChange}
-          />
-
-          <div className="lockdown-panel">
-            <h3>Lock-Down Mode</h3>
-            <p className="lockdown-status">
-              {lockdownEnabled ? '🔒 Swaps require a code.' : '🔓 Swaps are open.'}
-            </p>
+          <div className="stats-header">
+            <h2>Settings</h2>
             <button
-              className={lockdownEnabled ? 'danger-button' : 'primary-button'}
-              onClick={toggleLockdown}
+              className="toggle-button"
+              onClick={() => setShowSettings(!showSettings)}
             >
-              {lockdownEnabled ? 'Disable Lock-Down' : 'Enable Lock-Down'}
+              {showSettings ? 'Hide Settings' : 'Show Settings'}
             </button>
           </div>
 
-          <div className="danger-zone">
-            <button onClick={clearScores} className="danger-button">Clear Scores</button>
-            <button onClick={() => setPendingClearAll(true)} className="danger-button">Clear All</button>
-          </div>
+          {showSettings && (
+            <>
+              <GameModePanel gameMode={gameMode} onChange={handleGameModeChange} />
+              {gameModeError && <p className="error">{gameModeError}</p>}
+
+              <MaxWinsPanel
+                maxWinsLimit={maxWinsLimit}
+                maxWinsInput={maxWinsInput}
+                maxWinsError={maxWinsError}
+                onChange={handleMaxWinsChange}
+              />
+
+              <div className="lockdown-panel">
+                <h3>Lock-Down Mode</h3>
+                <p className="lockdown-status">
+                  {lockdownEnabled ? '🔒 Swaps require a code.' : '🔓 Swaps are open.'}
+                </p>
+                <button
+                  className={lockdownEnabled ? 'danger-button' : 'primary-button'}
+                  onClick={toggleLockdown}
+                >
+                  {lockdownEnabled ? 'Disable Lock-Down' : 'Enable Lock-Down'}
+                </button>
+              </div>
+
+              <div className="danger-zone">
+                <button onClick={clearScores} className="danger-button">Clear Scores</button>
+                <button onClick={() => setPendingClearAll(true)} className="danger-button">Clear All</button>
+              </div>
+            </>
+          )}
         </section>
 
       </main>
