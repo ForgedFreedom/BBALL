@@ -1,5 +1,9 @@
 import React from 'react';
 
+// How many players sit at the front of the Waitlist (i.e. next in line for
+// Next Team) before the rest collapse behind a "Show more" toggle.
+const WAITLIST_PREVIEW_COUNT = 5;
+
 export const PlayerLists = ({
   waitlist,
   pausedList,
@@ -9,12 +13,17 @@ export const PlayerLists = ({
   readyPlayer,
   removePlayer,
   startSwap,
-}) => (
+}) => {
+  const [showFullWaitlist, setShowFullWaitlist] = React.useState(false);
+  const hiddenWaitlistCount = Math.max(0, waitlist.length - WAITLIST_PREVIEW_COUNT);
+  const visibleWaitlist = showFullWaitlist ? waitlist : waitlist.slice(0, WAITLIST_PREVIEW_COUNT);
+
+  return (
   <div className="lists-container">
     <div className="list-section">
       <h2>Waitlist ({waitlist.length})</h2>
       <ul>
-        {waitlist.map((id) => (
+        {visibleWaitlist.map((id) => (
           <li key={id}>
             {getPlayerName(id)}
             <div className="player-actions">
@@ -24,6 +33,11 @@ export const PlayerLists = ({
           </li>
         ))}
       </ul>
+      {hiddenWaitlistCount > 0 && (
+        <button className="toggle-button waitlist-toggle" onClick={() => setShowFullWaitlist(!showFullWaitlist)}>
+          {showFullWaitlist ? 'Show Top 5 Only' : `Show ${hiddenWaitlistCount} More`}
+        </button>
+      )}
     </div>
 
     <div className="list-section">
@@ -56,4 +70,5 @@ export const PlayerLists = ({
       </ul>
     </div>
   </div>
-);
+  );
+};

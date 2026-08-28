@@ -70,7 +70,13 @@ index.html → src/main.jsx → src/App.jsx → src/components/*.jsx
 - `players`: `{id, name, wins, losses, winStreak, removed}[]` — the full
   roster including "ghosted" (removed) players; never deleted except by
   Clear All.
-- `waitlist`, `pausedList`, `nextTeam`: arrays of player **ids**.
+- `waitlist`, `pausedList`, `nextTeam`: arrays of player **ids**. `waitlist`
+  is strict FIFO order — index 0 is next to be pulled into `nextTeam` by
+  `fillNextTeam`. In the UI, `PlayerLists.jsx` only renders the front 5 of a
+  long Waitlist by default (a `showFullWaitlist` boolean local to that
+  component, not persisted — always starts collapsed on load, same as the
+  other collapsible panels), with a "Show N More" toggle to reveal the rest.
+  Paused/Next Team aren't collapsed since they don't tend to grow long.
 - `team1`/`team2` (Court A) and `team3`/`team4` (Court B): arrays of player
   ids. Team3/Team4 are only ever populated in a two-court mode (`4x4` or
   `3x3` — see "Game modes & team sizes" below); `5x5` is single-court.
