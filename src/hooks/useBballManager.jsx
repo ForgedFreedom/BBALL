@@ -15,6 +15,15 @@ const shuffleArray = (array) => {
   return shuffled;
 };
 
+// Matches the mm:ss format shown on the live GameClock, so log entries read
+// consistently with what was on screen.
+const formatClock = (totalSeconds) => {
+  const seconds = Math.max(0, totalSeconds || 0);
+  const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const ss = String(seconds % 60).padStart(2, '0');
+  return `${mm}:${ss}`;
+};
+
 export const useBballManager = () => {
   const [players, setPlayers] = React.useState([]);
   const [waitlist, setWaitlist] = React.useState([]);
@@ -296,7 +305,7 @@ export const useBballManager = () => {
     if (sourceList !== 'nextTeam' && nextTeam.length > 0) validTargetLists.push('nextTeam');
     if (sourceList !== 'team1' && team1.length > 0) validTargetLists.push('team1');
     if (sourceList !== 'team2' && team2.length > 0) validTargetLists.push('team2');
-    if (gameMode === '4x4') {
+    if (gameMode === '4x4' || gameMode === '3x3') {
       if (sourceList !== 'team3' && team3.length > 0) validTargetLists.push('team3');
       if (sourceList !== 'team4' && team4.length > 0) validTargetLists.push('team4');
     }
@@ -440,17 +449,18 @@ export const useBballManager = () => {
 
   // Pure preview of how the Next Team + Waitlist would split into the first two
   // teams, without touching state. Used to show players in the confirmation modal.
+  // Who gets INTO the first game is still strict FIFO (first in line, first
+  // seated) — only which of the two teams each of them lands on is random,
+  // so the earliest signups aren't always split the same predictable way.
   const previewFirstGameTeams = React.useMemo(() => {
     const teamSize = getTeamSize();
     const nt = [...nextTeam];
     const wl = [...waitlist];
-    const teamA = [];
-    while (teamA.length < teamSize && nt.length > 0) teamA.push(nt.shift());
-    while (teamA.length < teamSize && wl.length > 0) teamA.push(wl.shift());
-    const teamB = [];
-    while (teamB.length < teamSize && nt.length > 0) teamB.push(nt.shift());
-    while (teamB.length < teamSize && wl.length > 0) teamB.push(wl.shift());
-    return { teamA, teamB };
+    const combined = [];
+    while (combined.length < teamSize * 2 && nt.length > 0) combined.push(nt.shift());
+    while (combined.length < teamSize * 2 && wl.length > 0) combined.push(wl.shift());
+    const shuffled = shuffleArray(combined);
+    return { teamA: shuffled.slice(0, teamSize), teamB: shuffled.slice(teamSize) };
   }, [nextTeam, waitlist, getTeamSize]);
 
   const firstGame = React.useCallback((court) => {
@@ -587,7 +597,7 @@ export const useBballManager = () => {
       setClockElapsedB(elapsedSeconds);
       setLastWinnerUndoB(undoSnapshot);
     }
-    addLog(`${winnerLabel} won on Court ${court} (${winner.map((id) => getPlayerName(id)).join(', ')})`);
+    addLog(`${winnerLabel} won on Court ${court} (${winner.map((id) => getPlayerName(id)).join(', ')}) — game time ${formatClock(elapsedSeconds)}`);
     setPendingWinner(null);
   }, [team1, team2, team3, team4, team1Wins, team3Wins, team1Label, team2Label, team3Label, team4Label, maxWinsLimit, players, getPlayerName, addLog, clockStartA, clockStartB]);
 
@@ -642,7 +652,12 @@ export const useBballManager = () => {
   }, [lastWinnerUndoA, lastWinnerUndoB, addLog]);
 
   // --- Reset / clear ---
+  const [pendingResetCourt, setPendingResetCourt] = React.useState(null);
+  const requestResetCourt = React.useCallback((court) => setPendingResetCourt(court), []);
+  const cancelResetCourt = React.useCallback(() => setPendingResetCourt(null), []);
+
   const resetGameA = React.useCallback(() => {
+    const names = [...team1, ...team2].map(getPlayerName);
     setWaitlist((prev) => [...prev, ...team1, ...team2]);
     setTeam1([]);
     setTeam2([]);
@@ -654,9 +669,13 @@ export const useBballManager = () => {
     setClockStartA(null);
     setClockElapsedA(null);
     setLastWinnerUndoA(null);
-  }, [team1, team2]);
+    addLog(names.length
+      ? `Reset Court A — sent ${names.join(', ')} back to the Waitlist`
+      : 'Reset Court A');
+  }, [team1, team2, getPlayerName, addLog]);
 
   const resetGameB = React.useCallback(() => {
+    const names = [...team3, ...team4].map(getPlayerName);
     setWaitlist((prev) => [...prev, ...team3, ...team4]);
     setTeam3([]);
     setTeam4([]);
@@ -668,7 +687,16 @@ export const useBballManager = () => {
     setClockStartB(null);
     setClockElapsedB(null);
     setLastWinnerUndoB(null);
-  }, [team3, team4]);
+    addLog(names.length
+      ? `Reset Court B — sent ${names.join(', ')} back to the Waitlist`
+      : 'Reset Court B');
+  }, [team3, team4, getPlayerName, addLog]);
+
+  const confirmResetCourt = React.useCallback(() => {
+    if (pendingResetCourt === 'A') resetGameA();
+    else if (pendingResetCourt === 'B') resetGameB();
+    setPendingResetCourt(null);
+  }, [pendingResetCourt, resetGameA, resetGameB]);
 
   const clearAll = React.useCallback(() => {
     setPlayers([]);
@@ -707,6 +735,7 @@ export const useBballManager = () => {
     setPendingStart(null);
     setPendingFirstStart(null);
     setPendingNotEnoughPlayers(null);
+    setPendingResetCourt(null);
     setShowPlayerStats(false);
     setShowActivityLog(false);
     setShowSettings(false);
@@ -744,15 +773,24 @@ export const useBballManager = () => {
   const totalCount = players.filter((p) => !p.removed).length;
 
   const teamSizeForMode = (mode) => (mode === '5x5' ? 5 : mode === '4x4' ? 4 : 3);
+  // 5x5 is the only single-court mode — 4x4 and 3x3 both run two courts.
+  const isTwoCourtMode = (mode) => mode === '4x4' || mode === '3x3';
 
   // Switching modes changes the team size. If a team is already seated (a
   // winner sitting between games), it needs to grow or shrink to match —
   // topped up from Next Team/Waitlist, or benching the excess back to the
-  // Waitlist. Court B only exists in 4x4: if both courts have a winner
-  // sitting when leaving 4x4, Court B's winners become Court A's challengers
-  // (the two courts' winners play each other), each side just needing to be
-  // topped up by one. If only one court has a winner sitting, it simply
-  // carries over alone as the new team1.
+  // Waitlist. Court B only exists in two-court modes (4x4, 3x3):
+  //  - Leaving a two-court mode for 5x5: if both courts have a winner
+  //    sitting, Court B's winners become Court A's challengers (the two
+  //    courts' winners play each other), each side topped up as needed. If
+  //    only one court has a winner sitting, it carries over alone as the new
+  //    team1.
+  //  - Entering a two-court mode from 5x5 with a full seated winning team:
+  //    split that team fairly across both new courts (see below) rather than
+  //    just benching the excess.
+  //  - Switching directly between the two two-court modes (4x4 <-> 3x3):
+  //    each court's own seated team just resizes independently — no merging
+  //    or splitting, since both courts already exist.
   const handleGameModeChange = React.useCallback((e) => {
     const newMode = e.target.value;
     if (newMode === gameMode) return;
@@ -773,20 +811,26 @@ export const useBballManager = () => {
 
     const nt = [...nextTeam];
     let wl = [...waitlist];
-    const leavingFourByFour = gameMode === '4x4' && newMode !== '4x4';
-    // Going from 5x5 to 4x4 shrinks the winning team by one — but rather than
-    // just benching one player, split the team fairly: two of the five move
-    // over to seed Court B's Team 3, so both new teams keep some of the
-    // winning roster instead of Team 1 keeping everyone and Team 3 starting
-    // from scratch.
-    const splittingIntoFourByFour = gameMode === '5x5' && newMode === '4x4' && team1.length === 5;
+    const oldTeamSize = teamSizeForMode(gameMode);
+    const oldIsTwoCourt = isTwoCourtMode(gameMode);
+    const newIsTwoCourt = isTwoCourtMode(newMode);
+    const leavingTwoCourtMode = oldIsTwoCourt && !newIsTwoCourt;
+    const enteringTwoCourtMode = !oldIsTwoCourt && newIsTwoCourt;
+    const bothTwoCourtModes = oldIsTwoCourt && newIsTwoCourt;
+    // Going from the single-court mode to a two-court mode shrinks (or grows)
+    // the seated winning team — but rather than just benching the excess,
+    // split it fairly: roughly half moves over to seed Court B's Team 3, so
+    // both new teams keep some of the winning roster instead of Team 1
+    // keeping everyone and Team 3 starting from scratch.
+    const splittingIntoTwoCourt = enteringTwoCourtMode && team1.length === oldTeamSize;
 
     // Seed the new team1/team2/team3 from whoever's already sitting on a court.
     let seedTeam1 = team1;
     let seedTeam2 = [];
     let seedTeam3 = null;
     let team1FromCourtB = false;
-    if (leavingFourByFour) {
+    let splitMovedCount = 0;
+    if (leavingTwoCourtMode) {
       if (team1.length > 0 && team3.length > 0) {
         seedTeam2 = team3; // both courts' winners now play each other
       } else if (team1.length === 0 && team3.length > 0) {
@@ -794,10 +838,15 @@ export const useBballManager = () => {
         team1FromCourtB = true;
       }
       wl = [...wl, ...team4]; // team4 is always empty here, kept for safety
-    } else if (splittingIntoFourByFour) {
+    } else if (splittingIntoTwoCourt) {
       const shuffled = shuffleArray(team1);
-      seedTeam1 = shuffled.slice(0, 3);
-      seedTeam3 = shuffled.slice(3);
+      const team1Count = Math.min(Math.ceil(shuffled.length / 2), newTeamSize);
+      const team3Count = Math.min(shuffled.length - team1Count, newTeamSize);
+      seedTeam1 = shuffled.slice(0, team1Count);
+      seedTeam3 = shuffled.slice(team1Count, team1Count + team3Count);
+      splitMovedCount = seedTeam3.length;
+    } else if (bothTwoCourtModes && team3.length > 0) {
+      seedTeam3 = team3; // resize independently below — no merge, no split
     }
 
     const resizeTeam = (team) => {
@@ -863,7 +912,7 @@ export const useBballManager = () => {
     setClockElapsedA(null);
     setClockElapsedB(null);
 
-    if (leavingFourByFour) {
+    if (leavingTwoCourtMode) {
       setTeam3([]);
       setTeam4([]);
       setTeam3Wins(0);
@@ -883,8 +932,10 @@ export const useBballManager = () => {
 
     if (newTeam2.length > 0) {
       addLog(`Switched to ${newMode} mode — Court A and Court B winners now face off as ${team1Label} vs Team 2`);
-    } else if (newTeam3) {
-      addLog(`Switched to ${newMode} mode — split ${team1Label} to seed Team 3 on Court B (2 players moved, each side topped up from the Next Team)`);
+    } else if (splittingIntoTwoCourt && newTeam3) {
+      addLog(`Switched to ${newMode} mode — split ${team1Label} to seed Team 3 on Court B (${splitMovedCount} player(s) moved, each side topped up from the Next Team)`);
+    } else if (bothTwoCourtModes && newTeam3) {
+      addLog(`Switched to ${newMode} mode — resized Court A's and Court B's seated teams`);
     } else {
       const sizeDiff = newTeam1.length - seedTeam1.length;
       if (sizeDiff !== 0) {
@@ -1007,6 +1058,7 @@ export const useBballManager = () => {
     pendingFirstStart,
     pendingClearAll,
     pendingNotEnoughPlayers,
+    pendingResetCourt,
     showPlayerStats,
     showActivityLog,
     showSettings,
@@ -1052,6 +1104,9 @@ export const useBballManager = () => {
     undoWinner,
     resetGameA,
     resetGameB,
+    requestResetCourt,
+    cancelResetCourt,
+    confirmResetCourt,
     clearAll,
     cancelClearAll,
     clearScores,

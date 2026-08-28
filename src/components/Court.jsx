@@ -15,7 +15,7 @@ export const Court = ({
   startSwap,
   onStartGame,
   setPendingWinner,
-  resetGame,
+  onRequestReset,
   canUndoWinner,
   onUndoWinner,
   clockStartedAt,
@@ -86,7 +86,7 @@ export const Court = ({
         {(team1.length > 0 || team2.length > 0) && (
           <div className="court-footer-row">
             <GameClock running={gameStarted} startedAt={clockStartedAt} frozenSeconds={clockFrozenSeconds} />
-            <button onClick={resetGame} className="danger-button">Reset Court {court}</button>
+            <button onClick={onRequestReset} className="danger-button">Reset Court {court}</button>
           </div>
         )}
       </div>

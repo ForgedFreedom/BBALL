@@ -72,7 +72,8 @@ index.html → src/main.jsx → src/App.jsx → src/components/*.jsx
   Clear All.
 - `waitlist`, `pausedList`, `nextTeam`: arrays of player **ids**.
 - `team1`/`team2` (Court A) and `team3`/`team4` (Court B): arrays of player
-  ids. Team4 is only ever populated while `gameMode === '4x4'`.
+  ids. Team3/Team4 are only ever populated in a two-court mode (`4x4` or
+  `3x3` — see "Game modes & team sizes" below); `5x5` is single-court.
 - `team1Wins`/`team3Wins`: the current win-streak of whoever occupies the
   "Team 1"/"Team 3" (winners) slot on each court.
 - `gameStartedA/B`, `postMaxOutA/B`: per-court status flags.
@@ -81,9 +82,14 @@ index.html → src/main.jsx → src/App.jsx → src/components/*.jsx
   for how the "X Won" buttons strip these back off.
 - `maxWinsLimit`: when a team's streak hits this, both teams on that court
   get shuffled back into the waitlist and the streak resets (a "max-out").
-- `activityLog`: capped at 200 entries, newest first, persisted, cleared by
-  Clear All. Logs swap/pause/ready/remove/restore/signup/winner/mode-change/
-  lockdown events. Does **not** log every single click — see the hook for
+- `activityLog`: a **rolling** list — newest entry unshifted to the front,
+  trimmed back down to 200 whenever it would exceed that (`MAX_LOG_ENTRIES`
+  in the hook), so it's always "the most recent 200," not a hard stop.
+  Persisted, cleared by Clear All. Logs swap/pause/ready/remove/restore/
+  signup/winner/reset-court/mode-change/lockdown events. Winner entries
+  include that game's duration (`— game time mm:ss`, from the same clock
+  shown live on the court); reset-court entries name the players sent back
+  to the Waitlist. Does **not** log every single click — see the hook for
   exactly what calls `addLog`.
 - Undo snapshots: `lastSwapUndo`, `lastWinnerUndoA`, `lastWinnerUndoB` — each
   a **single-slot, most-recent-action-only** undo (not a history stack), per
@@ -103,9 +109,13 @@ These were negotiated in detail with the user across several turns — read
 this before changing related logic, since the "obvious" simpler
 implementation is usually the one that was explicitly rejected.
 
-**Game modes & team sizes.** 3x3 (3), 4x4 (4), 5x5 (5). Only 4x4 has a second
-court (Court B); 3x3 and 5x5 are single-court. Next Team auto-fills to the
-current mode's team size from the Waitlist via an effect (`fillNextTeam`).
+**Game modes & team sizes.** 3x3 (3), 4x4 (4), 5x5 (5). `5x5` is the only
+single-court mode; both `4x4` and `3x3` run two courts (Court B populates
+`team3`/`team4`). `isTwoCourtMode(mode)` in the hook (currently `mode ===
+'4x4' || mode === '3x3'`) is what mode-switching logic checks; `App.jsx`
+renders Court B off the equivalent inline check — keep both in sync if a
+third two-court mode is ever added. Next Team auto-fills to the current
+mode's team size from the Waitlist via an effect (`fillNextTeam`).
 
 **Winner-stays flow.** Declaring a winner keeps that team seated (as
 "Team 1"/"Team 3", labeled "(Winners)"), sends the loser to the Waitlist, and
@@ -116,24 +126,43 @@ Game" and "Start First Game" show the actual player names, computed via
 preview functions that mirror the real fill logic exactly, so what the modal
 shows is guaranteed to match what actually happens on confirm.
 
+**First game team assignment is randomized.** `previewFirstGameTeams`
+selects *who* gets into a court's first game strictly FIFO (first in line,
+first seated — teamSize × 2 players from Next Team then Waitlist), but then
+shuffles that selected group before splitting it in half, so which of the
+two teams each player lands on is random rather than always "first half in
+line = Team 1." A court's "first game" is identified the same way the code
+already did — `team1`/`team2` (or `team3`/`team4`) both empty — which
+naturally also covers Court B's first game and any court after Reset Court,
+not just the literal first game of a session; that broader scope was a
+deliberate choice, not an oversight.
+
 **Mode switching resizes seated teams.** Changing `gameMode` while a team is
 sitting mid-tournament (not empty, `gameStarted*` false) resizes it to the
-new team size rather than leaving it mismatched:
+new team size rather than leaving it mismatched. `isTwoCourtMode()` (see
+above) drives which of these branches applies — the logic is symmetric
+across both two-court modes, not 4x4-specific:
 - Generic case: top up from Next Team → Waitlist, or bench the excess back
   to the Waitlist.
-- **Leaving 4x4 with winners on both courts**: Court A's and Court B's
-  winners now play each other — Court B's team becomes the new Team 2, each
-  side topped up by however many it's short.
-- **Leaving 4x4 with a winner on only one court**: that team carries over
-  alone as the new Team 1 (and picks up the "(Winners)" label if it came
-  from Court B).
-- **5x5 → 4x4 with a full 5-player winning team**: split it fairly rather
-  than just benching one player — shuffle and randomly send 2 of the 5 to
-  seed Court B's Team 3, keep 3 on Team 1. Team 1 then needs 1 more from Next
-  Team, Team 3 needs 2 more. This was an explicit fairness rule from the
-  user ("both new teams should keep some of the winning roster, not just
-  Team 1"), not a general algorithm — it only applies to this specific
-  transition.
+- **Leaving a two-court mode (4x4 or 3x3) for 5x5, with winners on both
+  courts**: Court A's and Court B's winners now play each other — Court B's
+  team becomes the new Team 2, each side topped up by however many it's
+  short.
+- **Leaving a two-court mode with a winner on only one court**: that team
+  carries over alone as the new Team 1 (and picks up the "(Winners)" label
+  if it came from Court B).
+- **Entering a two-court mode (4x4 or 3x3) from 5x5 with a full 5-player
+  winning team**: split it fairly rather than just benching the excess —
+  shuffle, then send `min(ceil(5/2), newTeamSize)` to stay on Team 1 and the
+  rest (capped at `newTeamSize`) to seed Court B's Team 3, topping up
+  whichever side is short from Next Team/Waitlist. In practice this is a 3/2
+  split for both 4x4 and 3x3 (Team 1 keeps 3, Team 3 seeds with 2). This was
+  an explicit fairness rule from the user ("both new teams should keep some
+  of the winning roster, not just Team 1"), not a general algorithm — it
+  only applies to this specific kind of transition.
+- **Switching directly between the two two-court modes (4x4 ↔ 3x3)**: no
+  merge or split — Court A's and Court B's seated teams each just resize
+  independently to the new team size, since both courts already exist.
 - The min-player gate before allowing any switch checks *available* players
   (Next Team + Waitlist + everyone currently seated), not total signups, so
   paused/removed players don't count toward unlocking a bigger mode.
@@ -177,15 +206,13 @@ behind a 4-digit code:
 freezes on winner declaration, resets on a fresh game / court reset / Clear
 All / any mode switch. Uses `Math.floor` consistently (not `round`) so the
 frozen value always exactly continues from whatever the live ticking display
-last showed.
+last showed. The frozen duration is also written into that game's activity
+log entry (`— game time mm:ss`).
 
 ## Non-goals / things explicitly deferred
 
 - No multi-step undo history — single most-recent action per type, by
   request.
-- 3x3 mode is single-court only (no analog to Court B) — an assumption made
-  in the absence of any contrary instruction; flag it if the user wants a
-  second 3x3 court.
 - No real auth/security model beyond the lock-down code (see above).
 - The original single-file app's "4x4-split-a-live-court" migration feature
   (converting a running 5v5 into two 4v4 courts mid-game) was intentionally

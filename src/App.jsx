@@ -13,6 +13,7 @@ import { GameModePanel } from './components/GameModePanel.jsx';
 import { MaxWinsPanel } from './components/MaxWinsPanel.jsx';
 import { PlayerStatsPanel } from './components/PlayerStatsPanel.jsx';
 import { NotEnoughPlayersModal } from './components/NotEnoughPlayersModal.jsx';
+import { ResetCourtModal } from './components/ResetCourtModal.jsx';
 import { ActivityLogPanel } from './components/ActivityLogPanel.jsx';
 import { LockdownCodeModal } from './components/LockdownCodeModal.jsx';
 
@@ -55,6 +56,7 @@ function App() {
     setPendingClearAll,
     pendingNotEnoughPlayers,
     setPendingNotEnoughPlayers,
+    pendingResetCourt,
     showPlayerStats,
     showActivityLog,
     showSettings,
@@ -95,8 +97,9 @@ function App() {
     declareWinnerB,
     cancelWinner,
     undoWinner,
-    resetGameA,
-    resetGameB,
+    requestResetCourt,
+    cancelResetCourt,
+    confirmResetCourt,
     clearAll,
     cancelClearAll,
     clearScores,
@@ -219,14 +222,14 @@ function App() {
             startSwap={startSwap}
             onStartGame={requestStartA}
             setPendingWinner={setPendingWinner}
-            resetGame={resetGameA}
+            onRequestReset={() => requestResetCourt('A')}
             canUndoWinner={!!lastWinnerUndoA}
             onUndoWinner={() => undoWinner('A')}
             clockStartedAt={clockStartA}
             clockFrozenSeconds={clockElapsedA}
           />
 
-          {gameMode === '4x4' && (
+          {(gameMode === '4x4' || gameMode === '3x3') && (
             <Court
               court="B"
               team1={team3}
@@ -239,7 +242,7 @@ function App() {
               startSwap={startSwap}
               onStartGame={requestStartB}
               setPendingWinner={setPendingWinner}
-              resetGame={resetGameB}
+              onRequestReset={() => requestResetCourt('B')}
               canUndoWinner={!!lastWinnerUndoB}
               onUndoWinner={() => undoWinner('B')}
               clockStartedAt={clockStartB}
@@ -301,6 +304,17 @@ function App() {
       </main>
 
       <ClearAllModal open={!!pendingClearAll} onConfirm={clearAll} onCancel={cancelClearAll} />
+
+      <ResetCourtModal
+        open={pendingResetCourt !== null}
+        court={pendingResetCourt || ''}
+        teamAName={pendingResetCourt ? teamLabel(pendingResetCourt, 1) : ''}
+        teamANames={pendingResetCourt ? teamPlayers(pendingResetCourt, 1).map(getPlayerName) : []}
+        teamBName={pendingResetCourt ? teamLabel(pendingResetCourt, 2) : ''}
+        teamBNames={pendingResetCourt ? teamPlayers(pendingResetCourt, 2).map(getPlayerName) : []}
+        onConfirm={confirmResetCourt}
+        onCancel={cancelResetCourt}
+      />
 
       <WinnerModal
         open={!!pendingWinner}
