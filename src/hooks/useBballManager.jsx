@@ -24,6 +24,41 @@ const formatClock = (totalSeconds) => {
   return `${mm}:${ss}`;
 };
 
+// --- Player-name profanity filter ---
+// A short, curated blocklist checked against each *word* of the entered name
+// (after lowercasing and undoing common leetspeak substitutions), so simple
+// obfuscation like "a$$" or "5h1t" doesn't slip through. This is a casual
+// deterrent for a small local app, not a comprehensive filter — it's checked
+// per word (not against the whole name glued together) specifically to avoid
+// cross-word false positives (e.g. "Rob Itch" won't trip the "bitch" entry).
+// Extend BLOCKED_WORDS here if something gets through, or trim it if a
+// legitimate name gets caught (e.g. "Dick" as short for Richard).
+const BLOCKED_WORDS = [
+  'fuck', 'shit', 'bitch', 'asshole', 'bastard', 'cunt', 'dick', 'piss',
+  'cock', 'pussy', 'slut', 'whore', 'fag', 'faggot', 'nigger', 'nigga',
+  'retard', 'rape', 'twat', 'wank', 'douche', 'dyke', 'spic', 'chink',
+  'gook', 'tranny', 'cum', 'boob', 'penis', 'vagina', 'anal', 'sex',
+];
+
+const LEETSPEAK_MAP = { 0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't', '@': 'a', $: 's', '!': 'i' };
+
+const normalizeForProfanityCheck = (word) => word
+  .toLowerCase()
+  .split('')
+  .map((ch) => LEETSPEAK_MAP[ch] || ch)
+  .join('')
+  .replace(/[^a-z]/g, '');
+
+const containsBlockedWord = (name) => {
+  // Split on whitespace/punctuation so the check runs per word, not on the
+  // whole name concatenated together.
+  const words = name.split(/[^a-zA-Z0-9@$!]+/).filter(Boolean);
+  return words.some((word) => {
+    const normalized = normalizeForProfanityCheck(word);
+    return normalized.length > 0 && BLOCKED_WORDS.some((bad) => normalized.includes(bad));
+  });
+};
+
 export const useBballManager = () => {
   const [players, setPlayers] = React.useState([]);
   const [waitlist, setWaitlist] = React.useState([]);
@@ -233,6 +268,10 @@ export const useBballManager = () => {
     }
     if (name.length > 15) {
       setSignupError('Player name must be 15 characters or less.');
+      return;
+    }
+    if (containsBlockedWord(name)) {
+      setSignupError('That name isn\'t allowed. Please choose another.');
       return;
     }
     const normalizedName = name.toLowerCase();

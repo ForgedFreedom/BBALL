@@ -186,6 +186,24 @@ across both two-court modes, not 4x4-specific:
   feature — the user decided fixing that is just "swap the right person in,
   and undo the swap if that was wrong too."
 
+**Player-name profanity filter.** Signup (`addPlayer`) rejects names that
+contain a blocked word, via `containsBlockedWord()`/`BLOCKED_WORDS` at the
+top of the hook. Checked per **word** (split on whitespace/punctuation), not
+against the whole name glued together, specifically to avoid cross-word
+false positives (e.g. "Rob Itch" won't trip the "bitch" entry). Each word is
+lowercased and run through a small leetspeak substitution map (`0→o, 1→i,
+3→e, 4→a, 5→s, 7→t, @→a, $→s, !→i`) before a substring check, so casual
+obfuscation like "a$$" or "sh1t" is still caught.
+- **Known trade-off**: it's substring matching, not exact-word matching, so
+  it can false-positive on a legitimate word/name that happens to contain a
+  blocked one — e.g. "Scunthorpe" contains "cunt", and "Dick" (a common
+  short form of Richard) is itself on the list. This was an accepted
+  trade-off for a small, casual local app rather than something to solve
+  with fuzzy/whitelist logic; if a real player hits this, the simplest fix
+  is trimming the specific word from `BLOCKED_WORDS`.
+- Same "casual deterrent, not a real moderation system" trust model as the
+  lock-down code — see the security note below.
+
 **Ghost removal, not deletion.** "Remove" pulls a player out of every active
 list but keeps their `players` row (with `removed: true`) so their win/loss
 history survives in Player Stats (shown dimmed, tagged "(Removed)"). A
