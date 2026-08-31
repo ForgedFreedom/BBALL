@@ -5,6 +5,8 @@ const MAX_SAVE_LOGS = 100;
 const MAX_LOG_ENTRIES = 200;
 const DEFAULT_MAX_WINS = 5;
 const ADMIN_LOCKDOWN_CODE = '8989';
+// How long a correct swap-unlock code stays valid before lock-down re-engages.
+const SWAP_UNLOCK_DURATION_MS = 2 * 60 * 1000;
 
 const shuffleArray = (array) => {
   const shuffled = [...array];
@@ -111,11 +113,14 @@ export const useBballManager = () => {
   const [lastWinnerUndoA, setLastWinnerUndoA] = React.useState(null);
   const [lastWinnerUndoB, setLastWinnerUndoB] = React.useState(null);
 
-  // Lock-down mode. lockdownEnabled/lockdownCode persist; sessionUnlocked and the
-  // active prompt are session-local (reset on reload) and never saved.
+  // Lock-down mode. lockdownEnabled/lockdownCode persist; swapUnlockExpiresAt
+  // and the active prompt are session-local (reset on reload) and never saved.
+  // A correct swap-unlock code sets swapUnlockExpiresAt to a future timestamp
+  // (now + SWAP_UNLOCK_DURATION_MS) rather than unlocking for the rest of the
+  // session — swapping re-locks on its own once that time passes.
   const [lockdownEnabled, setLockdownEnabled] = React.useState(false);
   const [lockdownCode, setLockdownCode] = React.useState(null);
-  const [sessionUnlocked, setSessionUnlocked] = React.useState(false);
+  const [swapUnlockExpiresAt, setSwapUnlockExpiresAt] = React.useState(null);
   const [lockdownPrompt, setLockdownPrompt] = React.useState(null);
 
   const saveLogCount = React.useRef(0);
@@ -357,15 +362,17 @@ export const useBballManager = () => {
     setSwapError(null);
   }, [waitlist, pausedList, nextTeam, team1, team2, team3, team4, gameMode]);
 
-  // Public entry point for starting a swap. Gated by lock-down mode: if enabled
-  // and this session hasn't been unlocked yet, ask for the code first.
+  // Public entry point for starting a swap. Gated by lock-down mode: if
+  // enabled and the temporary swap-unlock has expired (or was never granted),
+  // ask for the code first.
   const startSwap = React.useCallback((id, sourceList) => {
-    if (lockdownEnabled && !sessionUnlocked) {
+    const stillUnlocked = swapUnlockExpiresAt && Date.now() < swapUnlockExpiresAt;
+    if (lockdownEnabled && !stillUnlocked) {
       setLockdownPrompt({ mode: 'verify', purpose: 'swap', pendingSwap: { id, sourceList }, error: null });
       return;
     }
     openSwapModal(id, sourceList);
-  }, [lockdownEnabled, sessionUnlocked, openSwapModal]);
+  }, [lockdownEnabled, swapUnlockExpiresAt, openSwapModal]);
 
   const completeSwap = React.useCallback((targetPlayerId, targetList) => {
     if (!swappingPlayer || !swappingPlayer.targetLists.includes(targetList)) {
@@ -784,7 +791,7 @@ export const useBballManager = () => {
     setLastWinnerUndoB(null);
     setLockdownEnabled(false);
     setLockdownCode(null);
-    setSessionUnlocked(false);
+    setSwapUnlockExpiresAt(null);
     setLockdownPrompt(null);
     saveLogCount.current = 0;
     setPendingClearAll(null);
@@ -1017,7 +1024,7 @@ export const useBballManager = () => {
         }
         setLockdownCode(code);
         setLockdownEnabled(true);
-        setSessionUnlocked(false);
+        setSwapUnlockExpiresAt(null);
         addLog('Lock-down mode enabled.');
         return null;
       }
@@ -1032,7 +1039,7 @@ export const useBballManager = () => {
       if (isAdmin) {
         setLockdownEnabled(false);
         setLockdownCode(null);
-        setSessionUnlocked(false);
+        setSwapUnlockExpiresAt(null);
         addLog('Lock-down mode reset with the admin code.');
         if (purpose === 'swap' && pendingSwap) {
           openSwapModal(pendingSwap.id, pendingSwap.sourceList);
@@ -1043,11 +1050,11 @@ export const useBballManager = () => {
       if (purpose === 'disable') {
         setLockdownEnabled(false);
         setLockdownCode(null);
-        setSessionUnlocked(false);
+        setSwapUnlockExpiresAt(null);
         addLog('Lock-down mode disabled.');
       } else if (purpose === 'swap') {
-        setSessionUnlocked(true);
-        addLog('Swaps unlocked for this session.');
+        setSwapUnlockExpiresAt(Date.now() + SWAP_UNLOCK_DURATION_MS);
+        addLog('Swaps unlocked for 2 minutes.');
         if (pendingSwap) {
           openSwapModal(pendingSwap.id, pendingSwap.sourceList);
         }

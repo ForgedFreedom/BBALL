@@ -103,8 +103,8 @@ index.html → src/main.jsx → src/App.jsx → src/components/*.jsx
   other action would make restoring them unsafe — e.g. starting a new game
   clears both courts' winner-undo snapshots because it consumes the shared
   Next Team/Waitlist pool those snapshots assumed was untouched.
-- Lock-down: `lockdownEnabled`/`lockdownCode` persist; `sessionUnlocked` and
-  the active `lockdownPrompt` do not (session-local, reset on reload).
+- Lock-down: `lockdownEnabled`/`lockdownCode` persist; `swapUnlockExpiresAt`
+  and the active `lockdownPrompt` do not (session-local, reset on reload).
 - Clocks: `clockStartA/B` (a real timestamp, not a counter — this is why the
   clock survives a page reload mid-game) and `clockElapsedA/B` (frozen
   seconds once a winner is declared).
@@ -214,9 +214,14 @@ actually deletes player records.
 behind a 4-digit code:
 - Turning it on prompts you to set the code.
 - The first swap attempt while locked prompts for the code; a correct entry
-  unlocks swapping for the rest of that browser session (not persisted —
-  re-locks on reload), per explicit user preference over "every swap needs
-  the code again."
+  unlocks swapping for the next 2 minutes (`SWAP_UNLOCK_DURATION_MS` in the
+  hook), tracked via a `swapUnlockExpiresAt` timestamp rather than a
+  session-long boolean — swapping re-locks itself once that time passes,
+  without needing a reload. Not persisted, so it's also cleared by a reload
+  regardless. This replaced an earlier "unlocked for the rest of the browser
+  session" behavior per explicit user preference, once they noticed in
+  testing that an unlock was otherwise equivalent to just disabling
+  lock-down for the remainder of the session.
 - Turning lock-down off also requires the code.
 - `8989` is a hardcoded admin code that works anywhere a code is requested
   and always fully resets lock-down (disables it + clears the set code) —

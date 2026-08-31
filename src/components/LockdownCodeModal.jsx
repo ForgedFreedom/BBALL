@@ -9,7 +9,7 @@ const TITLES = {
 
 const DESCRIPTIONS = {
   set: "Choose a 4-digit code. You'll need it to authorize swaps or turn lock-down off later.",
-  'verify-swap': 'Enter the 4-digit lock-down code to allow swapping for the rest of this session.',
+  'verify-swap': 'Enter the 4-digit lock-down code to allow swapping for the next 2 minutes.',
   'verify-disable': 'Enter the 4-digit lock-down code to turn lock-down mode off.',
 };
 
