@@ -66,7 +66,7 @@ export const Court = ({
       </div>
 
       <div className="game-controls">
-        {postMaxOut && <p className="max-out-message">Game Over! {stripSuffix(label1)} winners have been retired.</p>}
+        {postMaxOut && <p className="max-out-message">Game Over! {stripSuffix(label1)} winners have maxed out.</p>}
 
         {!gameStarted && isFirstGame && (
           <button className="primary-button" onClick={onStartGame}>Start Game</button>

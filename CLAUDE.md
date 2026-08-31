@@ -88,6 +88,10 @@ index.html → src/main.jsx → src/App.jsx → src/components/*.jsx
   for how the "X Won" buttons strip these back off.
 - `maxWinsLimit`: when a team's streak hits this, both teams on that court
   get shuffled back into the waitlist and the streak resets (a "max-out").
+  The "Start Next Game" confirmation modal (`StartGameModal.jsx`) shows a red
+  warning when the seated winning team is one win away from this limit
+  (`teamAWins + 1 >= maxWinsLimit`), so it's clear up front that a win here
+  is their last game before they max out.
 - `activityLog`: a **rolling** list — newest entry unshifted to the front,
   trimmed back down to 200 whenever it would exceed that (`MAX_LOG_ENTRIES`
   in the hook), so it's always "the most recent 200," not a hard stop.

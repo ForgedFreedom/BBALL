@@ -337,6 +337,8 @@ function App() {
         teamANames={(pendingStart === 'B' ? team3 : team1).map(getPlayerName)}
         teamBName={pendingStart === 'B' ? team4Label : team2Label}
         teamBNames={(previewNextGameChallengers[pendingStart] || []).map(getPlayerName)}
+        teamAWins={pendingStart === 'B' ? team3Wins : team1Wins}
+        maxWinsLimit={maxWinsLimit}
         onConfirm={() => {
           if (pendingStart === 'A') startGameA();
           else if (pendingStart === 'B') startGameB();
