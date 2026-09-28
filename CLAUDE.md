@@ -87,7 +87,15 @@ index.html → src/main.jsx → src/App.jsx → src/components/*.jsx
   `" (Winners)"` / `" (Challengers)"` — see `stripSuffix()` in `Court.jsx`
   for how the "X Won" buttons strip these back off.
 - `maxWinsLimit`: when a team's streak hits this, both teams on that court
-  get shuffled back into the waitlist and the streak resets (a "max-out").
+  go back into the Waitlist and the streak resets (a "max-out"). Only the
+  just-finished group (winner + loser) is shuffled among themselves before
+  being **appended** to the end of the existing Waitlist — the existing
+  Waitlist itself is never touched/reordered by this, so people already
+  waiting always stay strictly ahead of a group that just came off the
+  court. (Originally the whole combined array — existing Waitlist plus the
+  just-finished group — was shuffled together, which could bump people who
+  were already waiting behind the newly-arrived group; fixed per a real
+  complaint from players at the gym who noticed this.)
   The "Start Next Game" confirmation modal (`StartGameModal.jsx`) shows a red
   warning when the seated winning team is one win away from this limit
   (`teamAWins + 1 >= maxWinsLimit`), so it's clear up front that a win here

@@ -599,7 +599,12 @@ export const useBballManager = () => {
     const maxedOut = newWins >= maxWinsLimit;
 
     if (maxedOut) {
-      setWaitlist((prev) => shuffleArray([...prev, ...winner, ...loser]));
+      // Only shuffle the group that just came off the court (so the win/loss
+      // outcome doesn't dictate who's "ahead" within that group) — never the
+      // existing Waitlist, which must stay in its original FIFO order and
+      // strictly ahead of anyone just added, or people already waiting would
+      // get unfairly reshuffled/bumped by the newly-arrived group.
+      setWaitlist((prev) => [...prev, ...shuffleArray([...winner, ...loser])]);
     } else {
       setWaitlist((prev) => [...prev, ...loser]);
     }
