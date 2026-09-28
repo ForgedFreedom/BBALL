@@ -106,6 +106,10 @@ export const useBballManager = () => {
   const [showPlayerStats, setShowPlayerStats] = React.useState(false);
   const [showActivityLog, setShowActivityLog] = React.useState(false);
   const [showSettings, setShowSettings] = React.useState(false);
+  // Whether the header's Whistle/Horn sound buttons are shown. Unlike the
+  // collapsible panels above (which always start collapsed), this is a
+  // genuine on/off preference, so it persists and defaults to visible.
+  const [soundButtonsVisible, setSoundButtonsVisible] = React.useState(true);
   const [activityLog, setActivityLog] = React.useState([]);
 
   // Undo (single most-recent action, per action type)
@@ -192,6 +196,7 @@ export const useBballManager = () => {
         setActivityLog(state.activityLog || []);
         setLockdownEnabled(state.lockdownEnabled || false);
         setLockdownCode(state.lockdownCode || null);
+        setSoundButtonsVisible(state.soundButtonsVisible ?? true);
         setClockStartA(state.clockStartA || null);
         setClockStartB(state.clockStartB || null);
         setClockElapsedA(state.clockElapsedA ?? null);
@@ -211,7 +216,7 @@ export const useBballManager = () => {
     team1Wins, team3Wins, gameStartedA, gameStartedB,
     postMaxOutA, postMaxOutB, team1Label, team2Label,
     team3Label, team4Label, maxWinsLimit, gameMode,
-    activityLog, lockdownEnabled, lockdownCode,
+    activityLog, lockdownEnabled, lockdownCode, soundButtonsVisible,
     clockStartA, clockStartB, clockElapsedA, clockElapsedB,
   };
 
@@ -230,7 +235,7 @@ export const useBballManager = () => {
     if (loading) return;
     const timeout = setTimeout(saveSnapshot, 500);
     return () => clearTimeout(timeout);
-  }, [players, waitlist, pausedList, nextTeam, team1, team2, team3, team4, team1Wins, team3Wins, gameStartedA, gameStartedB, postMaxOutA, postMaxOutB, team1Label, team2Label, team3Label, team4Label, maxWinsLimit, gameMode, activityLog, lockdownEnabled, lockdownCode, clockStartA, clockStartB, clockElapsedA, clockElapsedB, loading, saveSnapshot]);
+  }, [players, waitlist, pausedList, nextTeam, team1, team2, team3, team4, team1Wins, team3Wins, gameStartedA, gameStartedB, postMaxOutA, postMaxOutB, team1Label, team2Label, team3Label, team4Label, maxWinsLimit, gameMode, activityLog, lockdownEnabled, lockdownCode, soundButtonsVisible, clockStartA, clockStartB, clockElapsedA, clockElapsedB, loading, saveSnapshot]);
 
   // Flush immediately if the tab is closed/refreshed/backgrounded before the debounce fires.
   React.useEffect(() => {
@@ -790,6 +795,7 @@ export const useBballManager = () => {
     setShowPlayerStats(false);
     setShowActivityLog(false);
     setShowSettings(false);
+    setSoundButtonsVisible(true);
     setActivityLog([]);
     setLastSwapUndo(null);
     setLastWinnerUndoA(null);
@@ -1113,6 +1119,7 @@ export const useBballManager = () => {
     showPlayerStats,
     showActivityLog,
     showSettings,
+    soundButtonsVisible,
     activityLog,
     totalCount,
     maxWins,
@@ -1168,6 +1175,7 @@ export const useBballManager = () => {
     setShowPlayerStats,
     setShowActivityLog,
     setShowSettings,
+    setSoundButtonsVisible,
     toggleLockdown,
     submitLockdownCode,
     cancelLockdownPrompt,

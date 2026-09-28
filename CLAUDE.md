@@ -250,9 +250,9 @@ frozen value always exactly continues from whatever the live ticking display
 last showed. The frozen duration is also written into that game's activity
 log entry (`— game time mm:ss`).
 
-**Sound effects (manual, experimental).** Two buttons in the header — 🔔
-Whistle and 📯 Horn — synthesized entirely with the Web Audio API in
-`src/utils/sounds.js` (`playWhistle()`/`playHorn()`), not audio files. No
+**Sound effects (manual, experimental).** Two buttons in the header — Whistle
+and Buzzer — synthesized entirely with the Web Audio API in
+`src/utils/sounds.js` (`playWhistle()`/`playBuzzer()`), not audio files. No
 external assets, no licensing concerns, works offline. This was deliberately
 scoped as manual/on-demand rather than auto-triggered by game events (e.g.
 "whistle on game start") — an explicit choice from the user to start as an
@@ -261,6 +261,26 @@ specific actions. Revisit the trigger question if the user asks to automate
 this later. A single lazily-created `AudioContext` is reused across calls
 (module-scope in `sounds.js`); browsers require the user gesture these
 buttons provide before audio can play.
+- Both icons (`WhistleIcon.jsx`, `BuzzerIcon.jsx`) are small hand-drawn
+  inline SVGs, not emoji — there's no standard Unicode "referee whistle"
+  glyph, and the original 🔔/📯 emoji choices didn't read clearly either.
+  The whistle is modeled on an actual metal referee whistle (mouthpiece
+  block with its side grip hole, round resonating chamber with the
+  rectangular sound slot on top, lanyard ring at the back); the buzzer is a
+  round push-button with radiating sound-wave lines.
+- **Gotcha already hit once**: every `button` in `style.css` sets
+  `color: white`, so an SVG detail meant to read as a "hole" or recess
+  must **not** be filled plain `white` (`currentColor` for the icon body is
+  already white too, so a white-on-white hole is invisible — this shipped
+  once and had to be fixed after the user flagged it from a screenshot).
+  Use a translucent dark fill instead, e.g. `rgba(0,0,0,0.4)`, which reads
+  as a recessed cutout on any button background color.
+- `soundButtonsVisible` (default `true`) gates whether the header shows
+  these buttons at all, toggled from a "Sound Effects" block in Settings
+  ("Hide/Show Sound Buttons"). Unlike the collapsible panels (which are
+  session-local, always starting collapsed), this is a genuine persisted
+  preference — it's saved to `localStorage` and survives reload, and resets
+  to `true` on Clear All like the other settings.
 
 ## Non-goals / things explicitly deferred
 

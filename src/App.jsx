@@ -16,7 +16,9 @@ import { NotEnoughPlayersModal } from './components/NotEnoughPlayersModal.jsx';
 import { ResetCourtModal } from './components/ResetCourtModal.jsx';
 import { ActivityLogPanel } from './components/ActivityLogPanel.jsx';
 import { LockdownCodeModal } from './components/LockdownCodeModal.jsx';
-import { playWhistle, playHorn } from './utils/sounds.js';
+import { playWhistle, playBuzzer } from './utils/sounds.js';
+import { WhistleIcon } from './components/WhistleIcon.jsx';
+import { BuzzerIcon } from './components/BuzzerIcon.jsx';
 
 function App() {
   const {
@@ -61,6 +63,7 @@ function App() {
     showPlayerStats,
     showActivityLog,
     showSettings,
+    soundButtonsVisible,
     activityLog,
     totalCount,
     maxWins,
@@ -110,6 +113,7 @@ function App() {
     setShowPlayerStats,
     setShowActivityLog,
     setShowSettings,
+    setSoundButtonsVisible,
     toggleLockdown,
     submitLockdownCode,
     cancelLockdownPrompt,
@@ -154,10 +158,16 @@ function App() {
           <span>Waitlist: {waitlistCount}</span>
           <span>Paused: {pausedList.length}</span>
         </div>
-        <div className="sound-fx-bar">
-          <button className="whistle-button" onClick={playWhistle}>🔔 Whistle</button>
-          <button className="horn-button" onClick={playHorn}>📯 Horn</button>
-        </div>
+        {soundButtonsVisible && (
+          <div className="sound-fx-bar">
+            <button className="whistle-button" onClick={playWhistle}>
+              <WhistleIcon /> Whistle
+            </button>
+            <button className="buzzer-button" onClick={playBuzzer}>
+              <BuzzerIcon /> Buzzer
+            </button>
+          </div>
+        )}
       </header>
 
       <main>
@@ -284,6 +294,19 @@ function App() {
                 maxWinsError={maxWinsError}
                 onChange={handleMaxWinsChange}
               />
+
+              <div className="lockdown-panel">
+                <h3>Sound Effects</h3>
+                <p className="lockdown-status">
+                  {soundButtonsVisible ? 'Whistle/Buzzer buttons are shown in the header.' : 'Whistle/Buzzer buttons are hidden.'}
+                </p>
+                <button
+                  className={soundButtonsVisible ? 'danger-button' : 'primary-button'}
+                  onClick={() => setSoundButtonsVisible(!soundButtonsVisible)}
+                >
+                  {soundButtonsVisible ? 'Hide Sound Buttons' : 'Show Sound Buttons'}
+                </button>
+              </div>
 
               <div className="lockdown-panel">
                 <h3>Lock-Down Mode</h3>

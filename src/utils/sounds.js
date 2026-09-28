@@ -50,7 +50,7 @@ export const playWhistle = () => {
 
 // Two slightly-detuned sawtooth oscillators for a fuller, harsher buzzer/air
 // horn tone than a single wave gives.
-export const playHorn = () => {
+export const playBuzzer = () => {
   const ctx = getAudioContext();
   const now = ctx.currentTime;
   const duration = 1.3;
