@@ -16,6 +16,7 @@ import { NotEnoughPlayersModal } from './components/NotEnoughPlayersModal.jsx';
 import { ResetCourtModal } from './components/ResetCourtModal.jsx';
 import { ActivityLogPanel } from './components/ActivityLogPanel.jsx';
 import { LockdownCodeModal } from './components/LockdownCodeModal.jsx';
+import { playWhistle, playHorn } from './utils/sounds.js';
 
 function App() {
   const {
@@ -152,6 +153,10 @@ function App() {
           <span>Total: {totalCount}</span>
           <span>Waitlist: {waitlistCount}</span>
           <span>Paused: {pausedList.length}</span>
+        </div>
+        <div className="sound-fx-bar">
+          <button className="whistle-button" onClick={playWhistle}>🔔 Whistle</button>
+          <button className="horn-button" onClick={playHorn}>📯 Horn</button>
         </div>
       </header>
 

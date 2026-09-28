@@ -250,6 +250,18 @@ frozen value always exactly continues from whatever the live ticking display
 last showed. The frozen duration is also written into that game's activity
 log entry (`— game time mm:ss`).
 
+**Sound effects (manual, experimental).** Two buttons in the header — 🔔
+Whistle and 📯 Horn — synthesized entirely with the Web Audio API in
+`src/utils/sounds.js` (`playWhistle()`/`playHorn()`), not audio files. No
+external assets, no licensing concerns, works offline. This was deliberately
+scoped as manual/on-demand rather than auto-triggered by game events (e.g.
+"whistle on game start") — an explicit choice from the user to start as an
+experiment with plain buttons before deciding whether/how to wire them to
+specific actions. Revisit the trigger question if the user asks to automate
+this later. A single lazily-created `AudioContext` is reused across calls
+(module-scope in `sounds.js`); browsers require the user gesture these
+buttons provide before audio can play.
+
 ## Non-goals / things explicitly deferred
 
 - No multi-step undo history — single most-recent action per type, by
