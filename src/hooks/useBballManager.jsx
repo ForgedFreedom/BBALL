@@ -110,6 +110,13 @@ export const useBballManager = () => {
   // collapsible panels above (which always start collapsed), this is a
   // genuine on/off preference, so it persists and defaults to visible.
   const [soundButtonsVisible, setSoundButtonsVisible] = React.useState(true);
+  // Optional admin-set signup message: when enabled (and non-blank) it shows as
+  // a banner above the courts and pops up after every successful Add Player.
+  // Enabled flag + text persist; the popup itself (signupMessagePopup = name of
+  // the player just added) is transient.
+  const [signupMessageEnabled, setSignupMessageEnabled] = React.useState(false);
+  const [signupMessageText, setSignupMessageText] = React.useState('');
+  const [signupMessagePopup, setSignupMessagePopup] = React.useState(null);
   const [activityLog, setActivityLog] = React.useState([]);
 
   // Undo (single most-recent action, per action type)
@@ -125,7 +132,21 @@ export const useBballManager = () => {
   const [lockdownEnabled, setLockdownEnabled] = React.useState(false);
   const [lockdownCode, setLockdownCode] = React.useState(null);
   const [swapUnlockExpiresAt, setSwapUnlockExpiresAt] = React.useState(null);
+  // Same idea for the Signup Message settings: while lock-down is on, editing
+  // the message text or turning it on/off needs the code, which unlocks those
+  // controls for SWAP_UNLOCK_DURATION_MS. Session-local, never saved.
+  const [messageUnlockExpiresAt, setMessageUnlockExpiresAt] = React.useState(null);
   const [lockdownPrompt, setLockdownPrompt] = React.useState(null);
+
+  // The message controls are rendered locked/unlocked (unlike swap, which only
+  // checks at click time), so clear the unlock when it expires to re-render.
+  React.useEffect(() => {
+    if (!messageUnlockExpiresAt) return;
+    const timeout = setTimeout(() => setMessageUnlockExpiresAt(null), Math.max(0, messageUnlockExpiresAt - Date.now()));
+    return () => clearTimeout(timeout);
+  }, [messageUnlockExpiresAt]);
+
+  const signupMessageLocked = lockdownEnabled && !messageUnlockExpiresAt;
 
   const saveLogCount = React.useRef(0);
 
@@ -197,6 +218,8 @@ export const useBballManager = () => {
         setLockdownEnabled(state.lockdownEnabled || false);
         setLockdownCode(state.lockdownCode || null);
         setSoundButtonsVisible(state.soundButtonsVisible ?? true);
+        setSignupMessageEnabled(state.signupMessageEnabled || false);
+        setSignupMessageText(state.signupMessageText || '');
         setClockStartA(state.clockStartA || null);
         setClockStartB(state.clockStartB || null);
         setClockElapsedA(state.clockElapsedA ?? null);
@@ -217,6 +240,7 @@ export const useBballManager = () => {
     postMaxOutA, postMaxOutB, team1Label, team2Label,
     team3Label, team4Label, maxWinsLimit, gameMode,
     activityLog, lockdownEnabled, lockdownCode, soundButtonsVisible,
+    signupMessageEnabled, signupMessageText,
     clockStartA, clockStartB, clockElapsedA, clockElapsedB,
   };
 
@@ -235,7 +259,7 @@ export const useBballManager = () => {
     if (loading) return;
     const timeout = setTimeout(saveSnapshot, 500);
     return () => clearTimeout(timeout);
-  }, [players, waitlist, pausedList, nextTeam, team1, team2, team3, team4, team1Wins, team3Wins, gameStartedA, gameStartedB, postMaxOutA, postMaxOutB, team1Label, team2Label, team3Label, team4Label, maxWinsLimit, gameMode, activityLog, lockdownEnabled, lockdownCode, soundButtonsVisible, clockStartA, clockStartB, clockElapsedA, clockElapsedB, loading, saveSnapshot]);
+  }, [players, waitlist, pausedList, nextTeam, team1, team2, team3, team4, team1Wins, team3Wins, gameStartedA, gameStartedB, postMaxOutA, postMaxOutB, team1Label, team2Label, team3Label, team4Label, maxWinsLimit, gameMode, activityLog, lockdownEnabled, lockdownCode, soundButtonsVisible, signupMessageEnabled, signupMessageText, clockStartA, clockStartB, clockElapsedA, clockElapsedB, loading, saveSnapshot]);
 
   // Flush immediately if the tab is closed/refreshed/backgrounded before the debounce fires.
   React.useEffect(() => {
@@ -295,7 +319,25 @@ export const useBballManager = () => {
     setPlayerName('');
     setSignupError(null);
     addLog(`Signed up ${name}`);
-  }, [playerName, players, addLog]);
+    if (signupMessageEnabled && signupMessageText.trim()) setSignupMessagePopup(name);
+  }, [playerName, players, addLog, signupMessageEnabled, signupMessageText]);
+
+  // Can't turn the message on while its text is blank (nothing to show).
+  const toggleSignupMessage = React.useCallback(() => {
+    if (signupMessageLocked) return;
+    if (!signupMessageEnabled && !signupMessageText.trim()) return;
+    const next = !signupMessageEnabled;
+    setSignupMessageEnabled(next);
+    if (!next) setSignupMessagePopup(null);
+    addLog(next ? 'Signup message turned on' : 'Signup message turned off');
+  }, [signupMessageLocked, signupMessageEnabled, signupMessageText, addLog]);
+
+  const updateSignupMessageText = React.useCallback((text) => {
+    if (signupMessageLocked) return;
+    setSignupMessageText(text);
+  }, [signupMessageLocked]);
+
+  const dismissSignupMessagePopup = React.useCallback(() => setSignupMessagePopup(null), []);
 
   // Players in the Next Team can pause themselves too, so pull from both pools.
   const pausePlayer = React.useCallback((id) => {
@@ -796,6 +838,9 @@ export const useBballManager = () => {
     setShowActivityLog(false);
     setShowSettings(false);
     setSoundButtonsVisible(true);
+    setSignupMessageEnabled(false);
+    setSignupMessageText('');
+    setSignupMessagePopup(null);
     setActivityLog([]);
     setLastSwapUndo(null);
     setLastWinnerUndoA(null);
@@ -803,6 +848,7 @@ export const useBballManager = () => {
     setLockdownEnabled(false);
     setLockdownCode(null);
     setSwapUnlockExpiresAt(null);
+    setMessageUnlockExpiresAt(null);
     setLockdownPrompt(null);
     saveLogCount.current = 0;
     setPendingClearAll(null);
@@ -1006,6 +1052,10 @@ export const useBballManager = () => {
   }, [gameMode, gameStartedA, gameStartedB, nextTeam, waitlist, team1, team2, team3, team4, team1Label, addLog]);
 
   // --- Lock-down mode ---
+  const requestSignupMessageUnlock = React.useCallback(() => {
+    setLockdownPrompt({ mode: 'verify', purpose: 'message', error: null });
+  }, []);
+
   const openEnableLockdownPrompt = React.useCallback(() => {
     setLockdownPrompt({ mode: 'set', purpose: 'enable', error: null });
   }, []);
@@ -1036,6 +1086,7 @@ export const useBballManager = () => {
         setLockdownCode(code);
         setLockdownEnabled(true);
         setSwapUnlockExpiresAt(null);
+        setMessageUnlockExpiresAt(null);
         addLog('Lock-down mode enabled.');
         return null;
       }
@@ -1051,6 +1102,7 @@ export const useBballManager = () => {
         setLockdownEnabled(false);
         setLockdownCode(null);
         setSwapUnlockExpiresAt(null);
+        setMessageUnlockExpiresAt(null);
         addLog('Lock-down mode reset with the admin code.');
         if (purpose === 'swap' && pendingSwap) {
           openSwapModal(pendingSwap.id, pendingSwap.sourceList);
@@ -1062,6 +1114,7 @@ export const useBballManager = () => {
         setLockdownEnabled(false);
         setLockdownCode(null);
         setSwapUnlockExpiresAt(null);
+        setMessageUnlockExpiresAt(null);
         addLog('Lock-down mode disabled.');
       } else if (purpose === 'swap') {
         setSwapUnlockExpiresAt(Date.now() + SWAP_UNLOCK_DURATION_MS);
@@ -1069,6 +1122,9 @@ export const useBballManager = () => {
         if (pendingSwap) {
           openSwapModal(pendingSwap.id, pendingSwap.sourceList);
         }
+      } else if (purpose === 'message') {
+        setMessageUnlockExpiresAt(Date.now() + SWAP_UNLOCK_DURATION_MS);
+        addLog('Signup message settings unlocked for 2 minutes.');
       }
       return null;
     });
@@ -1120,6 +1176,9 @@ export const useBballManager = () => {
     showActivityLog,
     showSettings,
     soundButtonsVisible,
+    signupMessageEnabled,
+    signupMessageText,
+    signupMessagePopup,
     activityLog,
     totalCount,
     maxWins,
@@ -1176,6 +1235,11 @@ export const useBballManager = () => {
     setShowActivityLog,
     setShowSettings,
     setSoundButtonsVisible,
+    setSignupMessageText: updateSignupMessageText,
+    toggleSignupMessage,
+    signupMessageLocked,
+    requestSignupMessageUnlock,
+    dismissSignupMessagePopup,
     toggleLockdown,
     submitLockdownCode,
     cancelLockdownPrompt,

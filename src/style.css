@@ -621,3 +621,76 @@ button:disabled {
     flex-wrap: wrap;
   }
 }
+
+/* ---------- Signup Message ---------- */
+.signup-message-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #eff6ff;
+  border: 2px solid #3b82f6;
+  color: #1e3a8a;
+  padding: 0.9rem 1.1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.signup-message-banner-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.signup-message-banner-text,
+.signup-message-popup-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.signup-message-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  font: inherit;
+  font-size: 0.9rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  resize: vertical;
+}
+
+.signup-message-popup {
+  text-align: center;
+}
+
+.signup-message-popup .modal-title {
+  font-size: 1.5rem;
+}
+
+.signup-message-popup-text {
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #1e3a8a;
+  background: #eff6ff;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin: 1rem 0 0;
+}
+
+.signup-message-popup .modal-actions {
+  justify-content: center;
+}
+
+.signup-message-popup .modal-actions button {
+  font-size: 1.1rem;
+  padding: 0.65rem 2rem;
+}
+
+.signup-message-input:disabled {
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: not-allowed;
+}

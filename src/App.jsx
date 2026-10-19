@@ -16,6 +16,7 @@ import { NotEnoughPlayersModal } from './components/NotEnoughPlayersModal.jsx';
 import { ResetCourtModal } from './components/ResetCourtModal.jsx';
 import { ActivityLogPanel } from './components/ActivityLogPanel.jsx';
 import { LockdownCodeModal } from './components/LockdownCodeModal.jsx';
+import { SignupMessageModal } from './components/SignupMessageModal.jsx';
 import { playWhistle, playBuzzer } from './utils/sounds.js';
 import { WhistleIcon } from './components/WhistleIcon.jsx';
 import { BuzzerIcon } from './components/BuzzerIcon.jsx';
@@ -64,6 +65,9 @@ function App() {
     showActivityLog,
     showSettings,
     soundButtonsVisible,
+    signupMessageEnabled,
+    signupMessageText,
+    signupMessagePopup,
     activityLog,
     totalCount,
     maxWins,
@@ -114,6 +118,11 @@ function App() {
     setShowActivityLog,
     setShowSettings,
     setSoundButtonsVisible,
+    setSignupMessageText,
+    toggleSignupMessage,
+    signupMessageLocked,
+    requestSignupMessageUnlock,
+    dismissSignupMessagePopup,
     toggleLockdown,
     submitLockdownCode,
     cancelLockdownPrompt,
@@ -148,6 +157,7 @@ function App() {
   }
 
   const waitlistCount = new Set(waitlist).size;
+  const signupMessageActive = signupMessageEnabled && signupMessageText.trim() !== '';
 
   return (
     <div className="app">
@@ -223,6 +233,13 @@ function App() {
           removePlayer={removePlayer}
           startSwap={startSwap}
         />
+
+        {signupMessageActive && (
+          <div className="signup-message-banner">
+            <span className="signup-message-banner-icon">📢</span>
+            <span className="signup-message-banner-text">{signupMessageText}</span>
+          </div>
+        )}
 
         <div className="courts-container">
           <Court
@@ -306,6 +323,40 @@ function App() {
                 >
                   {soundButtonsVisible ? 'Hide Sound Buttons' : 'Show Sound Buttons'}
                 </button>
+              </div>
+
+              <div className="lockdown-panel">
+                <h3>Signup Message</h3>
+                <p className="lockdown-status">
+                  {signupMessageEnabled
+                    ? '📢 On — shown above the courts and after every Add Player.'
+                    : 'Off — no message is shown.'}
+                  {lockdownEnabled && (signupMessageLocked
+                    ? ' 🔒 Locked by lock-down.'
+                    : ' 🔓 Unlocked for 2 minutes.')}
+                </p>
+                <textarea
+                  className="signup-message-input"
+                  value={signupMessageText}
+                  onChange={(e) => setSignupMessageText(e.target.value)}
+                  placeholder="Type the message players should see..."
+                  rows={3}
+                  maxLength={300}
+                  disabled={signupMessageLocked}
+                />
+                {signupMessageLocked ? (
+                  <button className="primary-button" onClick={requestSignupMessageUnlock}>
+                    🔒 Unlock to Edit
+                  </button>
+                ) : (
+                  <button
+                    className={signupMessageEnabled ? 'danger-button' : 'primary-button'}
+                    onClick={toggleSignupMessage}
+                    disabled={!signupMessageEnabled && !signupMessageText.trim()}
+                  >
+                    {signupMessageEnabled ? 'Turn Message Off' : 'Turn Message On'}
+                  </button>
+                )}
               </div>
 
               <div className="lockdown-panel">
@@ -403,6 +454,13 @@ function App() {
         onCancel={cancelSwap}
         swapError={swapError}
         listLabel={listLabel}
+      />
+
+      <SignupMessageModal
+        open={!!signupMessagePopup && signupMessageActive}
+        playerName={signupMessagePopup}
+        message={signupMessageText}
+        onClose={dismissSignupMessagePopup}
       />
 
       <LockdownCodeModal

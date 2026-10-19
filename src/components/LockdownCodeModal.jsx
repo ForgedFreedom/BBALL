@@ -5,12 +5,14 @@ const TITLES = {
   set: 'Set Lock-Down Code',
   'verify-swap': 'Lock-Down Is Active',
   'verify-disable': 'Disable Lock-Down',
+  'verify-message': 'Signup Message Is Locked',
 };
 
 const DESCRIPTIONS = {
-  set: "Choose a 4-digit code. You'll need it to authorize swaps or turn lock-down off later.",
+  set: "Choose a 4-digit code. You'll need it to authorize swaps, change the signup message, or turn lock-down off later.",
   'verify-swap': 'Enter the 4-digit lock-down code to allow swapping for the next 2 minutes.',
   'verify-disable': 'Enter the 4-digit lock-down code to turn lock-down mode off.',
+  'verify-message': 'Enter the 4-digit lock-down code to edit or turn the signup message on/off for the next 2 minutes.',
 };
 
 export const LockdownCodeModal = ({ open, mode, purpose, error, onSubmit, onCancel }) => {

@@ -282,6 +282,30 @@ buttons provide before audio can play.
   preference — it's saved to `localStorage` and survives reload, and resets
   to `true` on Clear All like the other settings.
 
+**Signup message (optional announcement).** A "Signup Message" block in
+Settings has a free-text box (max 300 chars, line breaks preserved) and a
+Turn Message On/Off button. The On button is disabled while the text is
+blank. While it's on, the message shows as a blue banner directly above the
+courts, and **every successful** Add Player pops up `SignupMessageModal.jsx`
+("Heads up, {name}!" + the message, in large text). A failed signup (duplicate,
+blocked word, etc.) doesn't trigger it. The popup can only be dismissed with
+"Got It", not by clicking the backdrop, so the player has to acknowledge it.
+`signupMessageEnabled`/`signupMessageText` persist (like
+`soundButtonsVisible`) and are reset by Clear All; the popup state
+(`signupMessagePopup`, the name of the player just added) is session-local.
+Turning it on/off is logged; editing the text is not.
+- **Covered by lock-down.** While lock-down is on, the message text box and
+  On/Off button are locked (`signupMessageLocked`), replaced by an "Unlock to
+  Edit" button that asks for the code (`purpose: 'message'`). A correct code
+  unlocks the message controls for 2 minutes (`messageUnlockExpiresAt`, same
+  duration constant as swaps but a **separate** unlock — unlocking swaps
+  doesn't unlock the message or vice versa). Unlike swap, which only checks
+  the expiry at click time, these controls are rendered locked/unlocked, so a
+  timer effect clears `messageUnlockExpiresAt` at expiry to re-lock the UI.
+  The banner and popup keep showing while locked — lock-down only protects
+  *changing* the message. The hook's setters also refuse changes while
+  locked, not just the UI.
+
 ## Non-goals / things explicitly deferred
 
 - No multi-step undo history — single most-recent action per type, by
