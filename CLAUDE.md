@@ -306,6 +306,20 @@ Turning it on/off is logged; editing the text is not.
   *changing* the message. The hook's setters also refuse changes while
   locked, not just the UI.
 
+**Rules page.** "View Full Rules" opens `RulesPage.jsx` full-screen. The main
+screen is `hidden`, not unmounted, so games/clocks and local UI state carry on.
+Built-in text lives in `src/data/rules.js`; typed rule numbers are ignored and
+regenerated on display.
+- **Always locked**, regardless of lock-down mode: only `8989` opens the editor
+  (`purpose: 'rules'`; the lock-down code doesn't work). Unlike everywhere
+  else, `8989` here does **not** reset lock-down. No time limit while editing.
+- Edits are per-device, under their own key `bballRules`, so Clear All keeps
+  them. "Share Changes" (email on browsers without a share menu) and "Copy
+  Changes" send only the differences from the built-in text.
+- **To publish rule changes to everyone:** edit `DEFAULT_RULES` **and bump
+  `RULES_VERSION`**. Devices then drop their local edits on next load.
+- The target score is deliberately not listed; teams agree on it per game.
+
 ## Non-goals / things explicitly deferred
 
 - No multi-step undo history — single most-recent action per type, by

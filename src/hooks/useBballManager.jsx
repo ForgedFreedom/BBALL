@@ -1,7 +1,8 @@
 import React from 'react';
+import { DEFAULT_RULES } from '../data/rules.js';
+import { loadSavedRules, saveRules } from '../utils/rules.js';
 
 const STORAGE_KEY = 'bballManagerState';
-const MAX_SAVE_LOGS = 100;
 const MAX_LOG_ENTRIES = 200;
 const DEFAULT_MAX_WINS = 5;
 const ADMIN_LOCKDOWN_CODE = '8989';
@@ -117,6 +118,12 @@ export const useBballManager = () => {
   const [signupMessageEnabled, setSignupMessageEnabled] = React.useState(false);
   const [signupMessageText, setSignupMessageText] = React.useState('');
   const [signupMessagePopup, setSignupMessagePopup] = React.useState(null);
+  // Rules page. rulesText persists under its own storage key (see utils/rules.js);
+  // the open page and editor are session-local.
+  const [rulesText, setRulesText] = React.useState(() => loadSavedRules() ?? DEFAULT_RULES);
+  const [showRules, setShowRules] = React.useState(false);
+  const [editingRules, setEditingRules] = React.useState(false);
+  const [rulesError, setRulesError] = React.useState(null);
   const [activityLog, setActivityLog] = React.useState([]);
 
   // Undo (single most-recent action, per action type)
@@ -148,7 +155,6 @@ export const useBballManager = () => {
 
   const signupMessageLocked = lockdownEnabled && !messageUnlockExpiresAt;
 
-  const saveLogCount = React.useRef(0);
 
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -245,10 +251,8 @@ export const useBballManager = () => {
   };
 
   const saveSnapshot = React.useCallback(() => {
-    if (saveLogCount.current >= MAX_SAVE_LOGS) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshotRef.current));
-      saveLogCount.current += 1;
     } catch (err) {
       setError('Failed to save data to localStorage. Check storage settings.');
       console.error(err);
@@ -850,7 +854,6 @@ export const useBballManager = () => {
     setSwapUnlockExpiresAt(null);
     setMessageUnlockExpiresAt(null);
     setLockdownPrompt(null);
-    saveLogCount.current = 0;
     setPendingClearAll(null);
   }, []);
 
@@ -1056,6 +1059,28 @@ export const useBballManager = () => {
     setLockdownPrompt({ mode: 'verify', purpose: 'message', error: null });
   }, []);
 
+  // Rules are always locked, and only the admin code opens the editor.
+  const requestRulesEdit = React.useCallback(() => {
+    setLockdownPrompt({ mode: 'verify', purpose: 'rules', error: null });
+  }, []);
+
+  const cancelRulesEdit = React.useCallback(() => {
+    setEditingRules(false);
+    setRulesError(null);
+  }, []);
+
+  const saveRulesEdit = React.useCallback((text) => {
+    if (!editingRules || !text.trim()) return;
+    if (!saveRules(text)) {
+      setRulesError('Could not save the rules on this device.');
+      return;
+    }
+    setRulesText(text);
+    setEditingRules(false);
+    setRulesError(null);
+    addLog('Rules edited.');
+  }, [editingRules, addLog]);
+
   const openEnableLockdownPrompt = React.useCallback(() => {
     setLockdownPrompt({ mode: 'set', purpose: 'enable', error: null });
   }, []);
@@ -1093,6 +1118,14 @@ export const useBballManager = () => {
 
       // mode === 'verify'
       const isAdmin = code === ADMIN_LOCKDOWN_CODE;
+
+      // Opening the rules editor leaves lock-down itself untouched.
+      if (purpose === 'rules') {
+        if (!isAdmin) return { ...prompt, error: 'Incorrect code.' };
+        setEditingRules(true);
+        return null;
+      }
+
       const isCorrect = code === lockdownCode;
       if (!isAdmin && !isCorrect) {
         return { ...prompt, error: 'Incorrect code.' };
@@ -1179,6 +1212,10 @@ export const useBballManager = () => {
     signupMessageEnabled,
     signupMessageText,
     signupMessagePopup,
+    rulesText,
+    showRules,
+    editingRules,
+    rulesError,
     activityLog,
     totalCount,
     maxWins,
@@ -1239,6 +1276,10 @@ export const useBballManager = () => {
     toggleSignupMessage,
     signupMessageLocked,
     requestSignupMessageUnlock,
+    setShowRules,
+    requestRulesEdit,
+    cancelRulesEdit,
+    saveRulesEdit,
     dismissSignupMessagePopup,
     toggleLockdown,
     submitLockdownCode,

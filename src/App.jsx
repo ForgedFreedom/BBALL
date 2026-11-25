@@ -17,6 +17,7 @@ import { ResetCourtModal } from './components/ResetCourtModal.jsx';
 import { ActivityLogPanel } from './components/ActivityLogPanel.jsx';
 import { LockdownCodeModal } from './components/LockdownCodeModal.jsx';
 import { SignupMessageModal } from './components/SignupMessageModal.jsx';
+import { RulesPage } from './components/RulesPage.jsx';
 import { playWhistle, playBuzzer } from './utils/sounds.js';
 import { WhistleIcon } from './components/WhistleIcon.jsx';
 import { BuzzerIcon } from './components/BuzzerIcon.jsx';
@@ -68,6 +69,10 @@ function App() {
     signupMessageEnabled,
     signupMessageText,
     signupMessagePopup,
+    rulesText,
+    showRules,
+    editingRules,
+    rulesError,
     activityLog,
     totalCount,
     maxWins,
@@ -122,11 +127,21 @@ function App() {
     toggleSignupMessage,
     signupMessageLocked,
     requestSignupMessageUnlock,
+    setShowRules,
+    requestRulesEdit,
+    cancelRulesEdit,
+    saveRulesEdit,
     dismissSignupMessagePopup,
     toggleLockdown,
     submitLockdownCode,
     cancelLockdownPrompt,
   } = useBballManager();
+
+  // The rules replace the main screen, so start them (and the return) at the top.
+  const toggleRules = (open) => {
+    setShowRules(open);
+    window.scrollTo(0, 0);
+  };
 
   const teamLabel = (court, team) => {
     if (court === 'A') return team === 1 ? team1Label : team2Label;
@@ -161,7 +176,20 @@ function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
+      {showRules && (
+        <RulesPage
+          rulesText={rulesText}
+          editing={editingRules}
+          error={rulesError}
+          onEdit={requestRulesEdit}
+          onSave={saveRulesEdit}
+          onCancelEdit={cancelRulesEdit}
+          onBack={() => toggleRules(false)}
+        />
+      )}
+
+      {/* Hidden rather than unmounted so local UI state survives a visit to the rules. */}
+      <header className="app-header" hidden={showRules}>
         <h1>RFCN BBALL Game Manager</h1>
         <div className="summary-bar">
           <span>Total: {totalCount}</span>
@@ -180,7 +208,7 @@ function App() {
         )}
       </header>
 
-      <main>
+      <main hidden={showRules}>
         {lastSwapUndo && (
           <div className="swap-undo-banner">
             <span>
@@ -202,6 +230,7 @@ function App() {
               <li>Respect Each Other; Respect the Call.</li>
               <li>Minimum Age: 16</li>
             </ul>
+            <button className="primary-button view-rules-button" onClick={() => toggleRules(true)}>View Full Rules</button>
           </section>
           <section className="panel">
             <h2>Player Signup</h2>
